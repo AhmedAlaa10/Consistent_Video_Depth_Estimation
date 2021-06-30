@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from skimage.transform import resize
-import image_io
+import utils.image_io
 TAG_FLOAT = 202021.25
 TAG_CHAR = 'PIEH'
 
@@ -17,8 +17,11 @@ TAG_CHAR = 'PIEH'
 name="shaman_3"
 batch_size=1 #TODO
 batch_size_gma=4
+batch_size_dp=1
+batch_size_gma_dp=1
 gma=True
 pose=True
+dp=True
 
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
@@ -31,15 +34,23 @@ else:
     src_path="./data/FN_wo_pose/"+name+"/clean/"
 if gma:
     gma_path="./data/GMA/"+name+"/clean/"
+if dp:
+    dp_path="./data/FN_DP/"+name+"/clean/"
+if dp and gma:
+    gma_dp_path="./data/GMA_DP/"+name+"/clean/"
+
 
 output_path=os.path.join(src_path,"evaluation")
 os.makedirs(output_path, exist_ok=True)
 
 #Dont change after here
 #----------------------------------------------------------------------------------------------------------------------------------------------------
-if not os.path.isdir(gma_path):
+if gma and not os.path.isdir(gma_path):
+    print("GMA depth folder ("+gma_path+") empty")
     gma=False
-
+if dp and not os.path.isdir(dp_path):
+    print("DensePose depth folder ("+dp_path+") empty")
+    dp=False
 
 norm_error_vis_path=os.path.join(output_path,"error_visualization_norm")
 os.makedirs(norm_error_vis_path, exist_ok=True)
@@ -59,9 +70,23 @@ os.makedirs(norm_gma_error_vis_path, exist_ok=True)
 gma_error_vis_path=os.path.join(output_path,"error_visualization_gma")
 os.makedirs(gma_error_vis_path, exist_ok=True)
 
+norm_dp_error_vis_path=os.path.join(output_path,"error_visualization_dp_norm")
+os.makedirs(norm_dp_error_vis_path, exist_ok=True)
+
+dp_error_vis_path=os.path.join(output_path,"error_visualization_dp")
+os.makedirs(dp_error_vis_path, exist_ok=True)
+
+norm_gma_dp_error_vis_path=os.path.join(output_path,"error_visualization_gma_dp_norm")
+os.makedirs(norm_gma_dp_error_vis_path, exist_ok=True)
+
+gma_dp_error_vis_path=os.path.join(output_path,"error_visualization_gma_dp")
+os.makedirs(gma_dp_error_vis_path, exist_ok=True)
+
 depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size)+"_Oadam/exact_depth/")
 initial_path=os.path.join(src_path,"depth_mc/exact_depth/")
 depth_gma_path=os.path.join(gma_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_gma)+"_Oadam/exact_depth/")
+depth_dp_path=os.path.join(dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_dp)+"_Oadam/exact_depth/")
+depth_gma_dp_path=os.path.join(gma_dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_gma_dp)+"_Oadam/exact_depth/")
 truth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
 
 
@@ -118,6 +143,8 @@ depth_error_fmt = os.path.join(depth_error_dir, "frame_{:06d}")
 scale_factor=[]
 scale_factor_initial=[]
 scale_factor_gma=[]
+scale_factor_dp=[]
+scale_factor_gma_dp=[]
 files = os.listdir(truth_path)
 files.sort()
 for file in files: #["frame_0001.dpt"]:
@@ -127,6 +154,10 @@ for file in files: #["frame_0001.dpt"]:
     truth = resize(truth, depth.shape)
     if gma:
         depth_gma = depth_read(os.path.join(depth_gma_path, file))
+    if dp:
+        depth_dp = depth_read(os.path.join(depth_dp_path, file))
+    if gma and dp:
+        depth_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
 
     #depth = resize(depth, truth.shape)
     depth_initial = depth_read(os.path.join(initial_path, file))
@@ -139,10 +170,19 @@ for file in files: #["frame_0001.dpt"]:
     scale_factor_initial.append(np.nanmean(truth)/np.nanmean(depth_initial)) 
     if gma:
         scale_factor_gma.append(np.nanmean(truth)/np.nanmean(depth_gma))
+    if dp:
+        scale_factor_dp.append(np.nanmean(truth)/np.nanmean(depth_dp))
+    if gma and dp:
+        scale_factor_gma_dp.append(np.nanmean(truth)/np.nanmean(depth_gma_dp))
 scale_factor= np.nanmean(scale_factor)
 scale_factor_initial= np.nanmean(scale_factor_initial)
 if gma:
     scale_factor_gma= np.nanmean(scale_factor_gma)
+if dp:
+    scale_factor_dp= np.nanmean(scale_factor_dp)
+if gma and dp:
+    scale_factor_gma_dp= np.nanmean(scale_factor_gma_dp)
+
 
 
 #Compute distance:
@@ -158,6 +198,14 @@ ml1_gma =[]
 mse_gma =[]
 ml1_norm_gma=[]
 mse_norm_gma=[]
+ml1_dp =[]
+mse_dp =[]
+ml1_norm_dp=[]
+mse_norm_dp=[]
+ml1_gma_dp =[]
+mse_gma_dp =[]
+ml1_norm_gma_dp=[]
+mse_norm_gma_dp=[]
 for file in files: #["frame_0001.dpt"]:
     truth = depth_read(os.path.join(truth_path, file))
     depth = depth_read(os.path.join(depth_path, file))
@@ -172,6 +220,10 @@ for file in files: #["frame_0001.dpt"]:
 
     if gma:
         dept_gma = depth_read(os.path.join(depth_gma_path, file))
+    if dp:
+        dept_dp = depth_read(os.path.join(depth_dp_path, file))
+    if gma and dp:
+        dept_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
 
 
 
@@ -181,6 +233,10 @@ for file in files: #["frame_0001.dpt"]:
 
     if gma:
         depth_norm_gma = depth_gma * scale_factor_gma
+    if dp:
+        depth_norm_dp = depth_dp * scale_factor_dp
+    if gma and dp:
+        depth_norm_gma_dp = depth_gma_dp * scale_factor_gma_dp
     
 
     distance = (truth - depth)
@@ -204,6 +260,22 @@ for file in files: #["frame_0001.dpt"]:
         mse_gma.append((np.square(distance_gma)).mean(axis=None))
         ml1_norm_gma.append((np.abs(distance_norm_gma)).mean(axis=None))
         mse_norm_gma.append((np.square(distance_norm_gma)).mean(axis=None))
+    
+    if dp:
+        distance_dp = (truth - depth_dp)
+        distance_norm_dp = (truth - depth_norm_dp)
+        ml1_dp.append((np.abs(distance_dp)).mean(axis=None))
+        mse_dp.append((np.square(distance_dp)).mean(axis=None))
+        ml1_norm_dp.append((np.abs(distance_norm_dp)).mean(axis=None))
+        mse_norm_dp.append((np.square(distance_norm_dp)).mean(axis=None))
+
+    if gma and dp:
+        distance_gma_dp = (truth - depth_gma_dp)
+        distance_norm_gma_dp = (truth - depth_norm_gma_dp)
+        ml1_gma_dp.append((np.abs(distance_gma_dp)).mean(axis=None))
+        mse_gma_dp.append((np.square(distance_gma_dp)).mean(axis=None))
+        ml1_norm_gma_dp.append((np.abs(distance_norm_gma_dp)).mean(axis=None))
+        mse_norm_gma_dp.append((np.square(distance_norm_gma_dp)).mean(axis=None))
 
     #Error(norm) vis:
     viz_path = os.path.join(norm_error_vis_path, file.split(".")[0] + ".png") 
@@ -248,6 +320,36 @@ for file in files: #["frame_0001.dpt"]:
         inv_depth =  np.divide(1., distance_norm_gma, out=np.zeros_like(distance_norm_gma), where=distance_norm_gma!=0)
         save_image(viz_path, inv_depth)
 
+    if dp:
+        #Error(dp) vis:
+        viz_path = os.path.join(dp_error_vis_path, file.split(".")[0] + ".png") 
+        distance_dp+=1
+        distance_dp.squeeze()
+        inv_depth =  np.divide(1., distance_dp, out=np.zeros_like(distance_dp), where=distance_dp!=0)
+        save_image(viz_path, inv_depth)
+
+        #Error(dp,norm) vis:
+        viz_path = os.path.join(norm_dp_error_vis_path, file.split(".")[0] + ".png") 
+        distance_norm_dp+=1
+        distance_norm_dp.squeeze()
+        inv_depth =  np.divide(1., distance_norm_dp, out=np.zeros_like(distance_norm_dp), where=distance_norm_dp!=0)
+        save_image(viz_path, inv_depth)
+
+    if gma and dp:
+        #Error(gma_dp) vis:
+        viz_path = os.path.join(gma_dp_error_vis_path, file.split(".")[0] + ".png") 
+        distance_gma_dp+=1
+        distance_gma_dp.squeeze()
+        inv_depth =  np.divide(1., distance_gma_dp, out=np.zeros_like(distance_gma_dp), where=distance_gma_dp!=0)
+        save_image(viz_path, inv_depth)
+
+        #Error(gma_dp,norm) vis:
+        viz_path = os.path.join(norm_gma_dp_error_vis_path, file.split(".")[0] + ".png") 
+        distance_norm_gma_dp+=1
+        distance_norm_gma_dp.squeeze()
+        inv_depth =  np.divide(1., distance_norm_gma_dp, out=np.zeros_like(distance_norm_gma_dp), where=distance_norm_gma_dp!=0)
+        save_image(viz_path, inv_depth)
+
     #Color vis for truth:
     #viz_path = os.path.join(truth_viz_path, file.split(".")[0] + ".png") 
     #truth.squeeze()
@@ -276,6 +378,28 @@ if gma:
     amse_norm_gma=np.nanmean(mse_norm_gma)
     print("Ml1(norm): "+str(aml1_norm_gma))
     print("MSE(norm): "+str(amse_norm_gma))
+
+if dp:
+    print("\nResults (dp):")
+    aml1_dp=np.nanmean(ml1_dp)
+    amse_dp=np.nanmean(mse_dp)
+    print("Ml1: "+str(aml1_dp))
+    print("MSE: "+str(amse_dp))
+    aml1_norm_dp=np.nanmean(ml1_norm_dp)
+    amse_norm_dp=np.nanmean(mse_norm_dp)
+    print("Ml1(norm): "+str(aml1_norm_dp))
+    print("MSE(norm): "+str(amse_norm_dp))
+
+if gma and dp:
+    print("\nResults (gma_dp):")
+    aml1_gma_dp=np.nanmean(ml1_gma_dp)
+    amse_gma_dp=np.nanmean(mse_gma_dp)
+    print("Ml1: "+str(aml1_gma_dp))
+    print("MSE: "+str(amse_gma_dp))
+    aml1_norm_gma_dp=np.nanmean(ml1_norm_gma_dp)
+    amse_norm_gma_dp=np.nanmean(mse_norm_gma_dp)
+    print("Ml1(norm): "+str(aml1_norm_gma_dp))
+    print("MSE(norm): "+str(amse_norm_gma_dp))
 
 print("\nResults (Initial):")
 aml1_initial=np.nanmean(ml1_initial)

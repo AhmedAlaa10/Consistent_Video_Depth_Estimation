@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from skimage.transform import resize
-import image_io
+import utils.image_io
 
 import open3d as o3d #pip install open3d
 
@@ -20,6 +20,8 @@ TAG_CHAR = 'PIEH'
 name="shaman_3"
 batch_size=1 #TODO
 batch_size_gma=4
+batch_size_dp=1
+batch_size_gma_dp=1
 is_pose=True
 viz=True
 
@@ -29,6 +31,7 @@ not_norm=True
 init=False
 standart=True 
 gma=False
+dp=False
 accumulate=True
 
 start_index=0 #default=0
@@ -44,8 +47,9 @@ if is_pose:
     src_path="./data/FN/"+name+"/clean/"
 else:
     src_path="./data/FN_wo_pose/"+name+"/clean/"
-
 gma_path="./data/GMA/"+name+"/clean/"
+dp_path="./data/FN_DP/"+name+"/clean/"
+gma_dp_path="./data/GMA_DP/"+name+"/clean/"
 
 
 
@@ -56,8 +60,12 @@ os.makedirs(output_path, exist_ok=True)
 #----------------------------------------------------------------------------------------------------------------------------------------------------
 src_cam_path = os.path.join(sintel_depth_path, "training", "camdata_left", name)
 
-if not os.path.isdir(gma_path):
+if gma and not os.path.isdir(gma_path):
+    print("GMA depth folder ("+gma_path+") empty")
     gma=False
+if dp and not os.path.isdir(dp_path):
+    print("DensePose depth folder ("+dp_path+") empty")
+    dp=False
 
 
 norm_error_vis_path=os.path.join(output_path,"error_visualization_norm")
@@ -78,9 +86,23 @@ os.makedirs(norm_gma_error_vis_path, exist_ok=True)
 gma_error_vis_path=os.path.join(output_path,"error_visualization_gma")
 os.makedirs(gma_error_vis_path, exist_ok=True)
 
+norm_dp_error_vis_path=os.path.join(output_path,"error_visualization_dp_norm")
+os.makedirs(norm_dp_error_vis_path, exist_ok=True)
+
+dp_error_vis_path=os.path.join(output_path,"error_visualization_dp")
+os.makedirs(dp_error_vis_path, exist_ok=True)
+
+norm_gma_dp_error_vis_path=os.path.join(output_path,"error_visualization_gma_dp_norm")
+os.makedirs(norm_gma_dp_error_vis_path, exist_ok=True)
+
+gma_dp_error_vis_path=os.path.join(output_path,"error_visualization_gma_dp")
+os.makedirs(gma_dp_error_vis_path, exist_ok=True)
+
 depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size)+"_Oadam/exact_depth/")
 initial_path=os.path.join(src_path,"depth_mc/exact_depth/")
 depth_gma_path=os.path.join(gma_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_gma)+"_Oadam/exact_depth/")
+depth_dp_path=os.path.join(dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_dp)+"_Oadam/exact_depth/")
+depth_gma_dp_path=os.path.join(gma_dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_gma_dp)+"_Oadam/exact_depth/")
 truth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
 
 
@@ -161,6 +183,8 @@ if (gtruth or norm) and standart:
     scale_factor=[]
     scale_factor_initial=[]
     scale_factor_gma=[]
+    scale_factor_dp=[]
+    scale_factor_gma_dp=[]
 
     files.sort()
     for file in files: #["frame_0001.dpt"]:
@@ -170,6 +194,10 @@ if (gtruth or norm) and standart:
         truth = resize(truth, depth.shape)
         if gma:
             depth_gma = depth_read(os.path.join(depth_gma_path, file))
+        if dp:
+            depth_dp = depth_read(os.path.join(depth_dp_path, file))
+        if gma and dp:
+            depth_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
 
         #depth = resize(depth, truth.shape)
         depth_initial = depth_read(os.path.join(initial_path, file))
@@ -182,11 +210,19 @@ if (gtruth or norm) and standart:
         scale_factor_initial.append(np.nanmean(truth)/np.nanmean(depth_initial)) 
         if gma:
             scale_factor_gma.append(np.nanmean(truth)/np.nanmean(depth_gma))
+        if dp:
+            scale_factor_dp.append(np.nanmean(truth)/np.nanmean(depth_dp))
+        if gma and dp:
+            scale_factor_gma_dp.append(np.nanmean(truth)/np.nanmean(depth_gma_dp))
+
     scale_factor= np.nanmean(scale_factor)
     scale_factor_initial= np.nanmean(scale_factor_initial)
     if gma:
         scale_factor_gma= np.nanmean(scale_factor_gma)
-
+    if dp:
+        scale_factor_dp= np.nanmean(scale_factor_dp)
+    if gma and dp:
+        scale_factor_gma_dp= np.nanmean(scale_factor_gma_dp)
 
 #Compute distance:
 ml1 =[]
@@ -201,6 +237,14 @@ ml1_gma =[]
 mse_gma =[]
 ml1_norm_gma=[]
 mse_norm_gma=[]
+ml1_dp =[]
+mse_dp =[]
+ml1_norm_dp=[]
+mse_norm_dp=[]
+ml1_gma_dp =[]
+mse_gma_dp =[]
+ml1_norm_gma_dp=[]
+mse_norm_gma_dp=[]
 pcs_acc=[]
 i=1
 for file in files: #["frame_0001.dpt"]:
@@ -236,6 +280,10 @@ for file in files: #["frame_0001.dpt"]:
             truth = resize(truth, depth_initial.shape)
         elif gma:
             truth = resize(truth, depth_gma.shape)
+        if dp:
+            dept_dp = depth_read(os.path.join(depth_dp_path, file))
+        if gma and dp:
+            dept_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
 
         
 
@@ -253,6 +301,10 @@ for file in files: #["frame_0001.dpt"]:
 
         if gma:
             depth_norm_gma = depth_gma * scale_factor_gma
+        if dp:
+            depth_norm_dp = depth_dp * scale_factor_dp
+        if gma and dp:
+            depth_norm_gma_dp = depth_gma_dp * scale_factor_gma_dp
         
 
         distance = (truth - depth)
@@ -276,6 +328,22 @@ for file in files: #["frame_0001.dpt"]:
             mse_gma.append((np.square(distance_gma)).mean(axis=None))
             ml1_norm_gma.append((np.abs(distance_norm_gma)).mean(axis=None))
             mse_norm_gma.append((np.square(distance_norm_gma)).mean(axis=None))
+
+        if dp:
+            distance_dp = (truth - depth_dp)
+            distance_norm_dp = (truth - depth_norm_dp)
+            ml1_dp.append((np.abs(distance_dp)).mean(axis=None))
+            mse_dp.append((np.square(distance_dp)).mean(axis=None))
+            ml1_norm_dp.append((np.abs(distance_norm_dp)).mean(axis=None))
+            mse_norm_dp.append((np.square(distance_norm_dp)).mean(axis=None))
+
+        if gma and dp:
+            distance_gma_dp = (truth - depth_gma_dp)
+            distance_norm_gma_dp = (truth - depth_norm_gma_dp)
+            ml1_gma_dp.append((np.abs(distance_gma_dp)).mean(axis=None))
+            mse_gma_dp.append((np.square(distance_gma_dp)).mean(axis=None))
+            ml1_norm_gma_dp.append((np.abs(distance_norm_gma_dp)).mean(axis=None))
+            mse_norm_gma_dp.append((np.square(distance_norm_gma_dp)).mean(axis=None))
 
     # colmapintrinsic:      w  h   fx     fy      cx   cy   #Scale c with
     #                    1024 436 1120.0 1120.0 511.5 217.5
@@ -310,6 +378,23 @@ for file in files: #["frame_0001.dpt"]:
         if not_norm:
             depth_img_g=o3d.geometry.Image(depth_gma)
             pc_g=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
+    if dp:
+        if norm:
+            depth_img_d_n=o3d.geometry.Image(depth_norm_dp)
+            pc_d_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
+
+        if not_norm:
+            depth_img_d=o3d.geometry.Image(depth_dp)
+            pc_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
+
+    if gma and dp:
+        if norm:
+            depth_img_g_d_n=o3d.geometry.Image(depth_norm_gma_dp)
+            pc_g_d_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
+
+        if not_norm:
+            depth_img_g_d=o3d.geometry.Image(depth_gma_dp)
+            pc_g_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
 
     #intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5, 217.5)
     sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01, resolution=20, create_uv_map=False)
@@ -334,6 +419,16 @@ for file in files: #["frame_0001.dpt"]:
             pcs.append(pc_g)
         if norm:
             pcs.append(pc_g_n)
+    if dp:
+        if not_norm:
+            pcs.append(pc_d)
+        if norm:
+            pcs.append(pc_d_n)
+    if gma and dp:
+        if not_norm:
+            pcs.append(pc_g_d)
+        if norm:
+            pcs.append(pc_g_d_n)
     # Flip it, otherwise the pointcloud will be upside down
     for pc in pcs:
         pc.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
@@ -342,15 +437,15 @@ for file in files: #["frame_0001.dpt"]:
     print("\n"+str(file)+":")
     if gtruth:
         print("ground truth = green")
-        #pc_t.paint_uniform_color([0.5, 0.706, 0.5]) #green
+        pc_t.paint_uniform_color([0.5, 0.706, 0.5]) #green
     #o3d.visualization.draw_geometries([pc_t])
     if standart:
         if not_norm:
-            print("depth = yellow")
-            #pc_d.paint_uniform_color([1, 0.706, 0]) #orange/yellow
+            print("depth = light red")
+            pc_d.paint_uniform_color([1, 0, 0]) #red
         if norm:
-            print("depth(norm) = red")
-            pc_d_n.paint_uniform_color([1, 0, 0]) #red
+            print("depth(norm) = dark red")
+            pc_d_n.paint_uniform_color([0.55, 0, 0]) #dark red
     if init:
         if not_norm:
             print("depth initial = light blue")
@@ -365,7 +460,21 @@ for file in files: #["frame_0001.dpt"]:
         if norm:
             print("depth gma(norm) = purple")
             pc_g_n.paint_uniform_color([0.5, 0.195, 0.66]) #purple
-      
+    if dp:
+        if not_norm:
+            print("depth dp = gray")
+            pc_d.paint_uniform_color([0.31, 0.31, 0.31]) #gray
+        if norm:
+            print("depth dp(norm) = black")
+            pc_d_n.paint_uniform_color([0., 0., 0.]) #black
+    if gma and dp:
+        if not_norm:
+            print("depth gma dp = yellow")
+            pc_g_d.paint_uniform_color([1, 0.706, 0]) #yellow
+        if norm:
+            print("depth gma dp(norm) = orange")
+            pc_g_d_n.paint_uniform_color([1, 0.58, 0.]) #orange
+            
     
     o3d.visualization.draw_geometries(pcs)
     #o3d.visualization.draw_geometries_with_animation_callback()
