@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from skimage.transform import resize
-import image_io
+import utils.image_io
 import copy
 
 import open3d as o3d #pip install open3d
@@ -19,21 +19,26 @@ TAG_CHAR = 'PIEH'
 
 
 
-
+fps = 7.5 #TODO
 name="shaman_3"
 batch_size=1 #TODO
-batch_size_gma=4
-is_pose=True
-viz=True
 render_obj=True
 
-gtruth=True
+preview=False
+interactive=False
+vis_depth=False
+vis_obj=False
+vis_mask=False
+
+
+use_gtruth=False #DEFAULT: False
+use_initial=False
+type= "FN"  #FN / GMA / ...
 norm=False
-not_norm=True
-init=False
-standart=False 
-gma=False
+obj_path=None #frames for obj  DEFAULT:None
+
 accumulate=False
+
 
 start_index=0 #default=0
 
@@ -44,56 +49,34 @@ sintel_depth_path =  "../MPI-Sintel-depth-training-20150305" #TODO
 
 #file_path="/home/umbra/Documents/MPI-Sintel-depth-training-20150305/training/depth/bamboo_2/frame_0001.dpt"
 depth_dataset_path="../MPI-Sintel-depth-training-20150305/"
-if is_pose:
-    src_path="./data/FN/"+name+"/clean/"
-else:
-    src_path="./data/FN_wo_pose/"+name+"/clean/"
 
-gma_path="./data/GMA/"+name+"/clean/"
+src_path="./data/"+type+"/"+name+"/clean/"
 
+img_path=os.path.join(src_path,"color_full")
 
-
-output_path=os.path.join(src_path,"evaluation")
+output_path=os.path.join(src_path,"render_frames")
 os.makedirs(output_path, exist_ok=True)
+
+mask_path=os.path.join(src_path,"render_masks")
+os.makedirs(mask_path, exist_ok=True)
+
 
 #Dont change after here
 #----------------------------------------------------------------------------------------------------------------------------------------------------
 src_cam_path = os.path.join(sintel_depth_path, "training", "camdata_left", name)
 
-if not os.path.isdir(gma_path):
-    gma=False
+if not os.path.isdir(src_path):
+    print("depth path ("+ src_path +") empty")
+    exit()
 
 
-norm_error_vis_path=os.path.join(output_path,"error_visualization_norm")
-os.makedirs(norm_error_vis_path, exist_ok=True)
-
-error_vis_path=os.path.join(output_path,"error_visualization")
-os.makedirs(error_vis_path, exist_ok=True)
-
-norm_initial_error_vis_path=os.path.join(output_path,"error_visualization_initial_norm")
-os.makedirs(norm_initial_error_vis_path, exist_ok=True)
-
-initial_error_vis_path=os.path.join(output_path,"error_visualization_initial")
-os.makedirs(initial_error_vis_path, exist_ok=True)
-
-norm_gma_error_vis_path=os.path.join(output_path,"error_visualization_gma_norm")
-os.makedirs(norm_gma_error_vis_path, exist_ok=True)
-
-gma_error_vis_path=os.path.join(output_path,"error_visualization_gma")
-os.makedirs(gma_error_vis_path, exist_ok=True)
-
-depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size)+"_Oadam/exact_depth/")
-initial_path=os.path.join(src_path,"depth_mc/exact_depth/")
-depth_gma_path=os.path.join(gma_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_gma)+"_Oadam/exact_depth/")
+if use_gtruth:
+    depth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
+elif use_initial:
+    depth_path=os.path.join(src_path,"depth_mc/exact_depth/")
+else:
+    depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size)+"_Oadam/exact_depth/")
 truth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
-
-
-#Path for colored truth depth visualization:
-if gtruth and viz:
-    truth_viz_path=os.path.join(depth_dataset_path,"training/dept_viz_col/") 
-    os.makedirs(truth_viz_path, exist_ok=True)
-    truth_viz_path=os.path.join(truth_viz_path,name)
-    os.makedirs(truth_viz_path, exist_ok=True)
 
 def depth_read(filename): #Copied from sintel_io.py from http://sintel.is.tue.mpg.de/depth
     """ Read depth data from file, return as numpy array. """
@@ -130,83 +113,58 @@ def save_image(file_name, image): # Copied from utils/image_io.py from https://g
     image = Image.fromarray(image.astype("uint8"))
     image.save(file_name)
 
-#depth = depth_read(depth_path)
-#print((depth).shape)
-#truth = depth_read(truth_path)
-#print((truth).shape)
-#shape=tuple((depth).shape)
-#shape=(436, 1024)
-#depth = resize(depth, truth.shape)
-#print((depth).shape)
+def video_from_frames(pathIn,pathOut): #Adapted from: https://medium.com/@iKhushPatel/convert-video-to-images-images-to-video-using-opencv-python-db27a128a481
+    frame_array = []
+    files = [f for f in os.listdir(pathIn) if os.path.isfile(os.path.join(pathIn, f))]
+    #for sorting the file names properly
+    files.sort(key = lambda x: x[5:-4])
+    files.sort()
+    frame_array = []
+    files = [f for f in os.listdir(pathIn) if os.path.isfile(os.path.join(pathIn, f))]
+    #for sorting the file names properly
+    files.sort(key = lambda x: x[5:-4])
+    for i in range(len(files)):
+        filename=os.path.join(pathIn, files[i])
+        #reading each files
+        img = cv2.imread(filename)
+        height, width, layers = img.shape
+        size = (width,height)
+        
+        #inserting the frames into an image array
+        frame_array.append(img)
+    out = cv2.VideoWriter(pathOut,cv2.VideoWriter_fourcc(*'DIVX'), fps, size)
+    for i in range(len(frame_array)):
+        # writing to a image array
+        out.write(frame_array[i])
+    out.release()   
 
-#print(np.min(depth))
-#print(np.nanmean(depth))
-#print(np.max(depth))
-#print(np.min(truth))
-#print(np.nanmean(truth))
-#print(np.max(truth))
 
-#distance = (truth - depth)
-#distance.flatten()
-depth_truth_dir= os.path.join(depth_path,"depth_truth")
-depth_truth_fmt = os.path.join(depth_truth_dir, "frame_{:06d}")
-depth_error_dir= os.path.join(depth_path,"depth_error")
-depth_error_fmt = os.path.join(depth_error_dir, "frame_{:06d}")
 
-if gtruth:
-    files = os.listdir(truth_path)
-elif standart:
-    files = os.listdir(depth_path)
-else:
-    files = os.listdir(truth_path)
+files = os.listdir(depth_path)
 files.sort()
 
-if (gtruth or norm) and standart:
+if norm:
     #Calculate statistical scale factor:
     scale_factor=[]
-    scale_factor_initial=[]
-    scale_factor_gma=[]
 
-    files.sort()
     for file in files: #["frame_0001.dpt"]:
         truth = depth_read(os.path.join(truth_path, file))
         depth = depth_read(os.path.join(depth_path, file))
         truth[truth == 100000000000.0] = np.nan
-        truth = resize(truth, depth.shape)
-        if gma:
-            depth_gma = depth_read(os.path.join(depth_gma_path, file))
+        truth = resize(truth, depth.shape)   
 
-        #depth = resize(depth, truth.shape)
-        depth_initial = depth_read(os.path.join(initial_path, file))
+        scale_factor.append(np.nanmean(truth)/np.nanmean(depth))  
 
-
-        #depth_initial = resize(depth_initial, truth.shape)
-        
-
-        scale_factor.append(np.nanmean(truth)/np.nanmean(depth)) 
-        scale_factor_initial.append(np.nanmean(truth)/np.nanmean(depth_initial)) 
-        if gma:
-            scale_factor_gma.append(np.nanmean(truth)/np.nanmean(depth_gma))
     scale_factor= np.nanmean(scale_factor)
-    scale_factor_initial= np.nanmean(scale_factor_initial)
-    if gma:
-        scale_factor_gma= np.nanmean(scale_factor_gma)
+ 
 
 
 #Compute distance:
+pcs_acc=[]
 ml1 =[]
 mse =[]
 ml1_norm=[]
 mse_norm=[]
-ml1_initial =[]
-mse_initial =[]
-ml1_norm_initial=[]
-mse_norm_initial=[]
-ml1_gma =[]
-mse_gma =[]
-ml1_norm_gma=[]
-mse_norm_gma=[]
-pcs_acc=[]
 i=1
 for file in files: #["frame_0001.dpt"]:
 
@@ -224,206 +182,192 @@ for file in files: #["frame_0001.dpt"]:
         print("Extrinsics not available")
         intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5 , 217.5 )
         extrinsic=[[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]]
-
-
         
-    if standart:
-        depth = depth_read(os.path.join(depth_path, file))
-    #depth = resize(depth, truth.shape)
-    if init:
-        depth_initial = depth_read(os.path.join(initial_path, file))
-    if gtruth:
-        truth = depth_read(os.path.join(truth_path, file))
-        truth[truth == 100000000000.0] = np.nan
-        if standart:
-            truth = resize(truth, depth.shape)
-        elif init:
-            truth = resize(truth, depth_initial.shape)
-        elif gma:
-            truth = resize(truth, depth_gma.shape)
-
-        
-
-    #depth_initial = resize(depth_initial, truth.shape)
+   
+    depth = depth_read(os.path.join(depth_path, file))
+    
 
 
-    if gma:
-        dept_gma = depth_read(os.path.join(depth_gma_path, file))
 
-
-    if (gtruth or norm) and standart:   
-        
-        depth_norm = depth * scale_factor 
-        depth_norm_initial = depth_initial * scale_factor_initial
-
-        if gma:
-            depth_norm_gma = depth_gma * scale_factor_gma
-        
-
+    if norm:           
+        depth= depth * scale_factor 
         distance = (truth - depth)
-        distance_norm = (truth - depth_norm)
         ml1.append((np.abs(distance)).mean(axis=None))
         mse.append((np.square(distance)).mean(axis=None))
-        ml1_norm.append((np.abs(distance_norm)).mean(axis=None))
-        mse_norm.append((np.square(distance_norm)).mean(axis=None))
-
-        distance_initial = (truth - depth_initial)
-        distance_norm_initial = (truth - depth_norm_initial)
-        ml1_initial.append((np.abs(distance_initial)).mean(axis=None))
-        mse_initial.append((np.square(distance_initial)).mean(axis=None))
-        ml1_norm_initial.append((np.abs(distance_norm_initial)).mean(axis=None))
-        mse_norm_initial.append((np.square(distance_norm_initial)).mean(axis=None))
-
-        if gma:
-            distance_gma = (truth - depth_gma)
-            distance_norm_gma = (truth - depth_norm_gma)
-            ml1_gma.append((np.abs(distance_gma)).mean(axis=None))
-            mse_gma.append((np.square(distance_gma)).mean(axis=None))
-            ml1_norm_gma.append((np.abs(distance_norm_gma)).mean(axis=None))
-            mse_norm_gma.append((np.square(distance_norm_gma)).mean(axis=None))
+        
 
     # colmapintrinsic:      w  h   fx     fy      cx   cy   #Scale c with
     #                    1024 436 1120.0 1120.0 511.5 217.5
     #                     384 160
-    if gtruth:
-        depth_img_t=o3d.geometry.Image(truth)
-        pc_t=o3d.geometry.PointCloud.create_from_depth_image(depth_img_t, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
-
-    if standart:
-        if not_norm:
-            depth_img_d=o3d.geometry.Image(depth)
-            pc_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_d, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
-
-        if norm:
-            depth_img_d_n=o3d.geometry.Image(depth_norm)
-            pc_d_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_d_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
-
-    if init:
-        if norm:
-            depth_img_i_n=o3d.geometry.Image(depth_norm_initial)
-            pc_i_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_i_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
-
-        if not_norm:
-            depth_img_i=o3d.geometry.Image(depth_initial)
-            pc_i=o3d.geometry.PointCloud.create_from_depth_image(depth_img_i, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
-
-    if gma:
-        if norm:
-            depth_img_g_n=o3d.geometry.Image(depth_norm_gma)
-            pc_g_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
-
-        if not_norm:
-            depth_img_g=o3d.geometry.Image(depth_gma)
-            pc_g=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
+    depth_img_d=o3d.geometry.Image(depth)
+    pc_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_d, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
 
     #intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5, 217.5)
+    #TODO: create objs:
     cf = o3d.geometry.TriangleMesh.create_coordinate_frame()
     obj1 = o3d.geometry.TriangleMesh.create_sphere(radius=1, resolution=20, create_uv_map=False)
-    obj2= copy.deepcopy(obj1).translate((0, 40, -3))
-    obj2.paint_uniform_color([1, 0, 0])
+    obj2= copy.deepcopy(obj1).translate((0, -40, 3))
+    
     objs=[obj2]#cf]#,obj1,obj2]
 
-    pcs=[]
-    if gtruth:
-        pcs.append(pc_t)
-    if standart:
-        if not_norm:
-            pcs.append(pc_d)
-        if norm:
-            pcs.append(pc_d_n)
-    if init:
-        if not_norm:
-            pcs.append(pc_i)
-        if norm:
-            pcs.append(pc_i_n)
-    if gma:
-        if not_norm:
-            pcs.append(pc_g)
-        if norm:
-            pcs.append(pc_g_n)
-    
-    # Flip it, otherwise the pointcloud will be upside down
-    for pc in pcs:
-        pc.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+    pcs=[pc_d]   
     if accumulate:
         pcs+=pcs_acc
     if render_obj:
         pcs+=objs
     print("\n"+str(file)+":")
-    if gtruth:
-        print("ground truth = green")
-        pc_t.paint_uniform_color([0.5, 0.706, 0.5]) #green
-    #o3d.visualization.draw_geometries([pc_t])
-    if standart:
-        if not_norm:
-            print("depth = yellow")
-            pc_d.paint_uniform_color([1, 0.706, 0]) #orange/yellow
-        if norm:
-            print("depth(norm) = red")
-            pc_d_n.paint_uniform_color([1, 0, 0]) #red
-    if init:
-        if not_norm:
-            print("depth initial = light blue")
-            pc_i.paint_uniform_color([0, 0.651, 0.929]) #light blue
-        if norm:
-            print("depth initial(norm) = dark blue")
-            pc_i_n.paint_uniform_color([0, 0, 1]) #dark blue
-    if gma:
-        if not_norm:
-            print("depth gma = pink")
-            pc_g.paint_uniform_color([0.9, 0.2, 0.84]) #pink
-        if norm:
-            print("depth gma(norm) = purple")
-            pc_g_n.paint_uniform_color([0.5, 0.195, 0.66]) #purple
-      
+
     
-    #render = rendering.OffscreenRenderer(640, 480)
-
-    #white = rendering.Material()
-    #white.base_color = [1.0, 1.0, 1.0, 1.0]
-    #white.shader = "defaultLit"
-
-    #green = rendering.Material()
-    #green.base_color = [0.0, 0.5, 0.0, 1.0]
-    #green.shader = "defaultLit"
-
-    #o3d.visualization.draw_geometries(pcs)
-    #o3d.visualization.draw_geometries_with_animation_callback()
-    #o3d.visualization.draw_geometries_with_custom_animation()
-    #TODO:open3d.org/docs/release/tutorial/visualization/interactive_visualization.html
     
-    #vis = o3d.visualization.VisualizerWithEditing()
-    #vis.create_window(visible=True)
-    #for pc in pcs:
-    #    vis.add_geometry(pc)
-    #    vis.update_geometry(pc)
-    #vis.poll_events()
-    #vis.update_renderer()
-    #vis.capture_screen_image("test.jpg")
-    #vis.destroy_window()
 
-    renderer= o3d.visualization.rendering.OffscreenRenderer(1024, 436,headless=True)
-    #extrinsic=[[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]]
-    renderer.scene.set_background([0.1, 0.2, 0.3, 1.0]) 
-    renderer.setup_camera(intrinsic,extrinsic)
-    #scene=o3d.visualization.rendering.Open3DScene(renderer)
-    mat = o3d.visualization.rendering.Material()
-    mat.base_color = [1.0, 1.0, 1.0, 1.0]
-    mat.shader = 'defaultUnlit'
-    for pc in pcs: #TODO pcs
-        renderer.scene.add_geometry(str(i),pc,mat)
-        i+=1
-    img = renderer.render_to_image()
-    print(img)
-    img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGBA2BGRA)
-    cv2.imshow("Preview window", img_cv)
-    cv2.waitKey()
+    if interactive:
+        o3d.visualization.gui.Application.instance.initialize()
+        w = o3d.visualization.O3DVisualizer("03DVisualizer",1024, 436)
+        w.reset_camera_to_default()
+        w.setup_camera(intrinsic,extrinsic)
 
-    o3d.io.write_image("test.jpg", img)
+        obj2.paint_uniform_color([1, 0, 0]) #Red #TODO: set obj colors
+        pc_d.paint_uniform_color([0.5, 0.706, 0.5]) #green
+        w.scene.set_background(np.array([1.,1.,1.,1.])) #white
+
+        #w.scene.set_background(np.array([1., 1., 1., 1.])) #Black
+        o3d.visualization.gui.Application.instance.add_window(w)
+        w.show_axes = True
+        w.size_to_fit() #Full screen
+        mat = o3d.visualization.rendering.Material()
+        #mat.base_color = [1.0, 1.0, 1.0, 1.0]
+        mat.shader = 'defaultUnlit'
+        for pc in pcs: 
+                print("added pc")
+                w.add_geometry(str(i),pc,mat)
+                i+=1
+        o3d.visualization.gui.Application.instance.run()
+        #o3d.visualization.gui.Application.instance.quit()
+        #w.export_current_image("test.png")
+    else:
+        renderer= o3d.visualization.rendering.OffscreenRenderer(1024, 436,headless=False)
+        renderer.setup_camera(intrinsic,extrinsic)        
+        mat = o3d.visualization.rendering.Material()
+        #mat.base_color = [1.0, 1.0, 1.0, 1.0]
+        mat.shader = 'defaultUnlit'
+        frame = file.split(".")[0]+".png"
+
+
+        if obj_path is None: #Render obj
+            obj_path=os.path.join(src_path,"render_objs")
+            os.makedirs(obj_path, exist_ok=True)
+
+        obj2.paint_uniform_color([1, 0, 0]) #Red #TODO: set obj colors
+        pc_d.paint_uniform_color([1.,1.,1.]) #white
+        renderer.scene.set_background(np.array([1.,1.,1.,1.])) #white
+           
+        #scene=o3d.visualization.rendering.Open3DScene(renderer)
+
+        for pc in pcs: 
+            #print("added pc")
+            renderer.scene.add_geometry(str(i),pc,mat)
+            i+=1
+        img_obj = renderer.render_to_image()    
+        img_obj_np = np.array(img_obj)
+        img_obj_cv = cv2.cvtColor(img_obj_np, cv2.COLOR_RGBA2BGRA)
+        if vis_depth:
+            img_d = renderer.render_to_depth_image()
+            img_d_cv = cv2.cvtColor(np.array(img_d), cv2.COLOR_GRAY2BGR)
+
+
+        if vis_obj:
+            if vis_depth:
+                cv2.imshow("Preview window", img_d_cv)
+                cv2.waitKey()
+            cv2.imshow("Preview window", img_obj_cv)
+            cv2.waitKey()
+
+        save_path = os.path.join(obj_path,frame)
+        o3d.io.write_image(save_path, img_obj)
+
+            
+        
+        #Render Mask:
+        for obj in objs:
+            obj.paint_uniform_color([1., 1., 1.]) #White
+        pc_d.paint_uniform_color([0., 0., 0.]) #black        
+        renderer.scene.set_background(np.array([0., 0., 0., 0.])) #Black
+
+        for pc in pcs: 
+            #print("added pc")
+            renderer.scene.add_geometry(str(i),pc,mat)
+            i+=1
+        mask_rgb = renderer.render_to_image()    
+        mask_rgb_cv = cv2.cvtColor(np.array(mask_rgb), cv2.COLOR_RGBA2BGRA)
+        mask_rgb_np = np.array(mask_rgb)
+
+        # Get boolean mask from rgb image:
+        #print(mask_rgb_np.shape)
+        [rows, columns, channels] = mask_rgb_np.shape
+        mask = np.zeros((rows,columns))
+        for row in range(rows):
+            for column in range(columns):
+                #print(mask_rgb_np[row,column,0])
+                if(mask_rgb_np[row,column,0]>230): #TODO: adjust + increase light source for mask; alt: swap black/white
+                    mask[row,column] = 1
+                else:
+                    mask[row,column] = 0    
+
+        #print(mask)
+        #print(mask.shape)
+        #print(np.min(mask))
+        #print(np.mean(np.array(mask)))
+        #print(np.max(mask))
+        #mask_cv = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)     
+        save_path = os.path.join(mask_path,frame)
+        #o3d.io.write_image(save_path, mask_rgb_cv)
+        if vis_mask:
+            cv2.imshow("Preview window", mask)
+            cv2.waitKey()
+        cv2.imwrite(save_path, mask)
+
+
+        #Create final image:
+        
+        split1 = file.split("_")
+        split2 = split1[1].split(".")
+        index = int(split2[0])-1
+        index =str(index).zfill(6)
+        file_new = str(split1[0]+"_"+index+".png") 
+        frame_path= os.path.join(img_path,file_new)
+        img=cv2.imread(frame_path) 
+        #print(img.shape)
+        [rows, columns, channels] = img.shape
+        result = img.copy()
+        for row in range(rows):
+            for column in range(columns):
+                #print(mask_rgb_np[row,column,0])
+                if(mask[row,column]==1):
+                    result[row,column] = img_obj_np[row,column][::-1]
+                #else:
+                    #result[row,column] = img[row,column]  
+        #print(result)
+        
+        if preview:
+            #result_cv = cv2.cvtColor(np.array(result), cv2.COLOR_RGBA2BGRA)
+            cv2.imshow("Preview window", result)
+            cv2.waitKey()
+
+        save_path = os.path.join(output_path,frame)
+        cv2.imwrite(save_path, result)
+        print("Frame rendered")
+
 
     if accumulate:
         pcs_acc+=pcs
     i+=1
+
+    #break #TODO: delete
+
+#TODO: Create video
+video_path=os.path.join(src_path, "rendered_video.mp4")
+video_from_frames(output_path,video_path)
+print("Video with "+fps+" fps created at "+video_path)
 
 
 

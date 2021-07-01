@@ -18,6 +18,7 @@ name = "alley_1" #TODO
 img_type = "clean" #TODO "clean"/ "final" / "albedo"
 data_type = "training" #TODO "training"/ "test" 
 collab=False
+method="FN"
 
 #local:
 dest_path = "./data/FN" #TODO
@@ -40,6 +41,10 @@ fps_input_vid = fps
 
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
+if len(sys.argv) > 2:
+    method = str(sys.argv[2])
+
+dest_path = "./data/"+method+"/" #TODO
 
 
 

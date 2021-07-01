@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from skimage.transform import resize
-import image_io
+import utils.image_io
 TAG_FLOAT = 202021.25
 TAG_CHAR = 'PIEH'
 

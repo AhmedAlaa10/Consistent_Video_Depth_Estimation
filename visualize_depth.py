@@ -33,6 +33,8 @@ standart=True
 gma=False
 dp=False
 accumulate=True
+rainbow=False
+interactive=False
 
 start_index=0 #default=0
 
@@ -52,10 +54,6 @@ dp_path="./data/FN_DP/"+name+"/clean/"
 gma_dp_path="./data/GMA_DP/"+name+"/clean/"
 
 
-
-output_path=os.path.join(src_path,"evaluation")
-os.makedirs(output_path, exist_ok=True)
-
 #Dont change after here
 #----------------------------------------------------------------------------------------------------------------------------------------------------
 src_cam_path = os.path.join(sintel_depth_path, "training", "camdata_left", name)
@@ -67,36 +65,6 @@ if dp and not os.path.isdir(dp_path):
     print("DensePose depth folder ("+dp_path+") empty")
     dp=False
 
-
-norm_error_vis_path=os.path.join(output_path,"error_visualization_norm")
-os.makedirs(norm_error_vis_path, exist_ok=True)
-
-error_vis_path=os.path.join(output_path,"error_visualization")
-os.makedirs(error_vis_path, exist_ok=True)
-
-norm_initial_error_vis_path=os.path.join(output_path,"error_visualization_initial_norm")
-os.makedirs(norm_initial_error_vis_path, exist_ok=True)
-
-initial_error_vis_path=os.path.join(output_path,"error_visualization_initial")
-os.makedirs(initial_error_vis_path, exist_ok=True)
-
-norm_gma_error_vis_path=os.path.join(output_path,"error_visualization_gma_norm")
-os.makedirs(norm_gma_error_vis_path, exist_ok=True)
-
-gma_error_vis_path=os.path.join(output_path,"error_visualization_gma")
-os.makedirs(gma_error_vis_path, exist_ok=True)
-
-norm_dp_error_vis_path=os.path.join(output_path,"error_visualization_dp_norm")
-os.makedirs(norm_dp_error_vis_path, exist_ok=True)
-
-dp_error_vis_path=os.path.join(output_path,"error_visualization_dp")
-os.makedirs(dp_error_vis_path, exist_ok=True)
-
-norm_gma_dp_error_vis_path=os.path.join(output_path,"error_visualization_gma_dp_norm")
-os.makedirs(norm_gma_dp_error_vis_path, exist_ok=True)
-
-gma_dp_error_vis_path=os.path.join(output_path,"error_visualization_gma_dp")
-os.makedirs(gma_dp_error_vis_path, exist_ok=True)
 
 depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size)+"_Oadam/exact_depth/")
 initial_path=os.path.join(src_path,"depth_mc/exact_depth/")
@@ -429,57 +397,70 @@ for file in files: #["frame_0001.dpt"]:
             pcs.append(pc_g_d)
         if norm:
             pcs.append(pc_g_d_n)
-    # Flip it, otherwise the pointcloud will be upside down
-    for pc in pcs:
-        pc.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
     if accumulate:
         pcs+=pcs_acc
     print("\n"+str(file)+":")
-    if gtruth:
+    if gtruth and not rainbow:
         print("ground truth = green")
         pc_t.paint_uniform_color([0.5, 0.706, 0.5]) #green
     #o3d.visualization.draw_geometries([pc_t])
     if standart:
-        if not_norm:
+        if not_norm and not rainbow:
             print("depth = light red")
             pc_d.paint_uniform_color([1, 0, 0]) #red
-        if norm:
+        if norm and not rainbow:
             print("depth(norm) = dark red")
             pc_d_n.paint_uniform_color([0.55, 0, 0]) #dark red
     if init:
-        if not_norm:
+        if not_norm and not rainbow:
             print("depth initial = light blue")
             pc_i.paint_uniform_color([0, 0.651, 0.929]) #light blue
-        if norm:
+        if norm and not rainbow:
             print("depth initial(norm) = dark blue")
             pc_i_n.paint_uniform_color([0, 0, 1]) #dark blue
     if gma:
-        if not_norm:
+        if not_norm and not rainbow:
             print("depth gma = pink")
             pc_g.paint_uniform_color([0.9, 0.2, 0.84]) #pink
-        if norm:
+        if norm and not rainbow:
             print("depth gma(norm) = purple")
             pc_g_n.paint_uniform_color([0.5, 0.195, 0.66]) #purple
     if dp:
-        if not_norm:
+        if not_norm and not rainbow:
             print("depth dp = gray")
             pc_d.paint_uniform_color([0.31, 0.31, 0.31]) #gray
-        if norm:
+        if norm and not rainbow:
             print("depth dp(norm) = black")
             pc_d_n.paint_uniform_color([0., 0., 0.]) #black
     if gma and dp:
-        if not_norm:
+        if not_norm and not rainbow:
             print("depth gma dp = yellow")
             pc_g_d.paint_uniform_color([1, 0.706, 0]) #yellow
-        if norm:
+        if norm and not rainbow:
             print("depth gma dp(norm) = orange")
             pc_g_d_n.paint_uniform_color([1, 0.58, 0.]) #orange
             
+    if interactive:
+        o3d.visualization.gui.Application.instance.initialize()
+        w = o3d.visualization.O3DVisualizer("03DVisualizer",1024, 436)
+        w.reset_camera_to_default()
+        w.setup_camera(intrinsic,extrinsic)
+        #w.scene.set_background(np.array([1., 1., 1., 1.])) #Black
+        o3d.visualization.gui.Application.instance.add_window(w)
+        w.show_axes = True
+        #w.size_to_fit() #Full screen
+        mat = o3d.visualization.rendering.Material()
+        #mat.base_color = [1.0, 1.0, 1.0, 1.0]
+        mat.shader = 'defaultUnlit'
+        for pc in pcs: 
+                print("added pc")
+                w.add_geometry(str(i),pc,mat)
+                i+=1
+        o3d.visualization.gui.Application.instance.run()
+    else:
+        o3d.visualization.draw_geometries(pcs)
     
-    o3d.visualization.draw_geometries(pcs)
-    #o3d.visualization.draw_geometries_with_animation_callback()
-    #o3d.visualization.draw_geometries_with_custom_animation()
-    #TODO:open3d.org/docs/release/tutorial/visualization/interactive_visualization.html
+ 
     if accumulate:
         pcs_acc+=pcs
     i+=1
