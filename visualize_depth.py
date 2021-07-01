@@ -20,7 +20,7 @@ TAG_CHAR = 'PIEH'
 name="shaman_3"
 batch_size=1 #TODO
 batch_size_gma=4
-batch_size_dp=1
+batch_size_dp=2
 batch_size_gma_dp=1
 is_pose=True
 viz=True
@@ -34,7 +34,7 @@ gma=False
 dp=False
 accumulate=True
 rainbow=False
-interactive=False
+interactive=True
 
 start_index=0 #default=0
 
@@ -225,11 +225,17 @@ for file in files: #["frame_0001.dpt"]:
     if len(os.listdir(src_cam_path))>0:
         frame_cam = file.split(".")[0]+".cam"
         I,E = cam_read(os.path.join(src_cam_path, frame_cam))
-        intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5 , 217.5)
+        if init or standart or gma or dp:            
+            intrinsic=o3d.camera.PinholeCameraIntrinsic(384, 160, 1120.0*(384/1024), 1120.0*(160/436), 511.5*(384/1024) , 217.5*(160/436) )
+        else:
+            intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5 , 217.5 )
         extrinsic=E
     else:
         print("Extrinsics not available")
-        intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5 , 217.5 )
+        if init or standart or gma or dp:            
+            intrinsic=o3d.camera.PinholeCameraIntrinsic(384, 160, 1120.0*(384/1024), 1120.0*(160/436), 511.5*(384/1024) , 217.5*(160/436) )
+        else:
+            intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5 , 217.5 )
         extrinsic=[[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]]
 
 

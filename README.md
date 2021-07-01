@@ -1,6 +1,12 @@
 # Consistent Video Depth Estimation
-
 Code adpated from: https://github.com/facebookresearch/consistent_depth 
+
+Setup:
+
+Follow the instructions on: https://github.com/facebookresearch/consistent_depth 
+pip install open3d
+pip install cv2
+
 
 Run on Sintel dataset:
 
@@ -28,7 +34,7 @@ gma: python main.py --video_file ./data/$Method/$Name/$Type/video.mp4 --path ./d
 flownet+DensePose: python main.py --video_file ./data/$Method/$Name/$Type/video.mp4  --path ./data/FN_DP_wo_pose/$Name/$Type/--initialize_pose --make_video --flow_checkpoint FlowNet2 --DensePose
 gma+DensePose: python main.py --video_file ./data/$Method/$Name/$Type/video.mp4 --path ./data/GMA_DP_wo_pose/$Name/$Type/ --initialize_pose --make_video --flow_checkpoint GMA --DensePose
 
-additional options: --batch_size 1 
+additional options: --batch_size 1 | --camera_params "1120.0, 511.5, 217.5"
 
 
 

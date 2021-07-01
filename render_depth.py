@@ -23,9 +23,12 @@ fps = 7.5 #TODO
 name="shaman_3"
 batch_size=1 #TODO
 render_obj=True
+scale=True
+scale_f=0.5
 
 preview=False
-interactive=False
+interactive=True
+rgbd=True
 vis_depth=False
 vis_obj=False
 vis_mask=False
@@ -48,11 +51,11 @@ if len(sys.argv) > 1:
 sintel_depth_path =  "../MPI-Sintel-depth-training-20150305" #TODO
 
 #file_path="/home/umbra/Documents/MPI-Sintel-depth-training-20150305/training/depth/bamboo_2/frame_0001.dpt"
-depth_dataset_path="../MPI-Sintel-depth-training-20150305/"
+sintel_path="../MPI-Sintel-complete/"
 
 src_path="./data/"+type+"/"+name+"/clean/"
 
-img_path=os.path.join(src_path,"color_full")
+img_path=os.path.join(src_path,"color_down_png")
 
 output_path=os.path.join(src_path,"render_frames")
 os.makedirs(output_path, exist_ok=True)
@@ -71,12 +74,12 @@ if not os.path.isdir(src_path):
 
 
 if use_gtruth:
-    depth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
+    depth_path=os.path.join(sintel_depth_path,"training/depth/"+name+"/")
 elif use_initial:
     depth_path=os.path.join(src_path,"depth_mc/exact_depth/")
 else:
     depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size)+"_Oadam/exact_depth/")
-truth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
+truth_path=os.path.join(sintel_depth_path,"training/depth/"+name+"/")
 
 def depth_read(filename): #Copied from sintel_io.py from http://sintel.is.tue.mpg.de/depth
     """ Read depth data from file, return as numpy array. """
@@ -145,7 +148,7 @@ files.sort()
 
 if norm:
     #Calculate statistical scale factor:
-    scale_factor=[]
+    scale_factor_n=[]
 
     for file in files: #["frame_0001.dpt"]:
         truth = depth_read(os.path.join(truth_path, file))
@@ -153,9 +156,22 @@ if norm:
         truth[truth == 100000000000.0] = np.nan
         truth = resize(truth, depth.shape)   
 
-        scale_factor.append(np.nanmean(truth)/np.nanmean(depth))  
+        scale_factor_n.append(np.nanmean(truth)/np.nanmean(depth))  
+
+    scale_factor_n= np.nanmean(scale_factor_n)
+
+if scale:
+    #Calculate statistical scale factor:
+    scale_factor=[]
+
+    for file in files: #["frame_0001.dpt"]:
+        depth = depth_read(os.path.join(depth_path, file))
+        if norm:           
+            depth= depth * scale_factor_n 
+        scale_factor.append(np.nanmean(depth))  
 
     scale_factor= np.nanmean(scale_factor)
+    scale_factor=(scale_f/scale_factor)
  
 
 
@@ -176,31 +192,55 @@ for file in files: #["frame_0001.dpt"]:
     if len(os.listdir(src_cam_path))>0:
         frame_cam = file.split(".")[0]+".cam"
         I,E = cam_read(os.path.join(src_cam_path, frame_cam))
-        intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5 , 217.5 )
+            # colmapintrinsic:      w  h   fx     fy      cx   cy   #Scale c with
+            #                    1024 436 1120.0 1120.0 511.5 217.5
+            #                     384 160
+        if use_gtruth:
+            intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5 , 217.5 )
+        else:
+            intrinsic=o3d.camera.PinholeCameraIntrinsic(384, 160, 1120.0*(384/1024), 1120.0*(160/436), 511.5*(384/1024) , 217.5*(160/436) )
         extrinsic=E
     else:
         print("Extrinsics not available")
-        intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5 , 217.5 )
+        if use_gtruth:
+            intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5 , 217.5 )
+        else:
+            intrinsic=o3d.camera.PinholeCameraIntrinsic(384, 160, 1120.0*(384/1024), 1120.0*(160/436), 511.5*(384/1024) , 217.5*(160/436) )
         extrinsic=[[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]]
         
    
     depth = depth_read(os.path.join(depth_path, file))
-    
-
-
+    if scale:
+        depth*=scale_factor 
 
     if norm:           
-        depth= depth * scale_factor 
+        depth= depth * scale_factor_n 
         distance = (truth - depth)
         ml1.append((np.abs(distance)).mean(axis=None))
         mse.append((np.square(distance)).mean(axis=None))
         
+    if rgbd:
+        if use_gtruth:
+            frame_img = file.split(".")[0]+".png"
+            frame_path= os.path.join(sintel_path,"training",type,name,frame_img)
+            rgb_image=cv2.imread(frame_path)
+            rgb_image=o3d.geometry.Image(rgb_image)
+        else:
+            split1 = file.split("_")
+            split2 = split1[1].split(".")
+            index = int(split2[0])-1
+            index =str(index).zfill(6)
+            file_new = str(split1[0]+"_"+index+".png") 
+            frame_path= os.path.join(img_path,file_new)
+            rgb_image=cv2.imread(frame_path)          
+            rgb_image=o3d.geometry.Image(rgb_image)
 
-    # colmapintrinsic:      w  h   fx     fy      cx   cy   #Scale c with
-    #                    1024 436 1120.0 1120.0 511.5 217.5
-    #                     384 160
     depth_img_d=o3d.geometry.Image(depth)
-    pc_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_d, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
+    if rgbd:
+        rgbd_img_d=o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_image, depth_img_d, depth_scale=1, depth_trunc=1000.0, convert_rgb_to_intensity=False)
+        pc_d=o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_img_d, intrinsic, extrinsic=extrinsic)
+    else:
+        pc_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_d, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #depth_scale doesn't work is like 1
 
     #intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5, 217.5)
     #TODO: create objs:
@@ -227,12 +267,16 @@ for file in files: #["frame_0001.dpt"]:
         w.setup_camera(intrinsic,extrinsic)
 
         obj2.paint_uniform_color([1, 0, 0]) #Red #TODO: set obj colors
-        pc_d.paint_uniform_color([0.5, 0.706, 0.5]) #green
+        if not rgbd:
+            pc_d.paint_uniform_color([0.5, 0.706, 0.5]) #green
         w.scene.set_background(np.array([1.,1.,1.,1.])) #white
 
         #w.scene.set_background(np.array([1., 1., 1., 1.])) #Black
         o3d.visualization.gui.Application.instance.add_window(w)
         w.show_axes = True
+        w.show_ground = True
+        w.show_settings = True
+        w.point_size=7
         w.size_to_fit() #Full screen
         mat = o3d.visualization.rendering.Material()
         #mat.base_color = [1.0, 1.0, 1.0, 1.0]
@@ -245,7 +289,10 @@ for file in files: #["frame_0001.dpt"]:
         #o3d.visualization.gui.Application.instance.quit()
         #w.export_current_image("test.png")
     else:
-        renderer= o3d.visualization.rendering.OffscreenRenderer(1024, 436,headless=False)
+        if use_gtruth:
+            renderer= o3d.visualization.rendering.OffscreenRenderer(1024, 436,headless=False)
+        else:
+            renderer= o3d.visualization.rendering.OffscreenRenderer(384, 160,headless=False)
         renderer.setup_camera(intrinsic,extrinsic)        
         mat = o3d.visualization.rendering.Material()
         #mat.base_color = [1.0, 1.0, 1.0, 1.0]
@@ -328,14 +375,18 @@ for file in files: #["frame_0001.dpt"]:
 
 
         #Create final image:
-        
-        split1 = file.split("_")
-        split2 = split1[1].split(".")
-        index = int(split2[0])-1
-        index =str(index).zfill(6)
-        file_new = str(split1[0]+"_"+index+".png") 
-        frame_path= os.path.join(img_path,file_new)
-        img=cv2.imread(frame_path) 
+        if use_gtruth:
+            frame_img = file.split(".")[0]+".png"
+            frame_path= os.path.join(sintel_path,"training",type,name,frame_img)
+            img=cv2.imread(frame_path)
+        else:
+            split1 = file.split("_")
+            split2 = split1[1].split(".")
+            index = int(split2[0])-1
+            index =str(index).zfill(6)
+            file_new = str(split1[0]+"_"+index+".png") 
+            frame_path= os.path.join(img_path,file_new)
+            img=cv2.imread(frame_path) 
         #print(img.shape)
         [rows, columns, channels] = img.shape
         result = img.copy()
