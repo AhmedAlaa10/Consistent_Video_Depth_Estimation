@@ -6,7 +6,7 @@ import os
 from os.path import join as pjoin
 import shutil
 
-from depth_fine_tuning_eval import DepthFineTuner
+from depth_fine_tuning_eval_human import DepthFineTuner
 from flow import Flow
 from scale_calibration import calibrate_scale
 from tools import make_video as mkvid
