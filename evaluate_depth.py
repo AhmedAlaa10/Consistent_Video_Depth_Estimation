@@ -15,7 +15,7 @@ TAG_CHAR = 'PIEH'
 
 
 name="shaman_3"
-batch_size=1 #TODO
+batch_size=2 #TODO
 batch_size_gma=4
 batch_size_dp=2
 batch_size_gma_dp=1
