@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import csv
 from posix import listdir
 from shutil import copyfile
 from pathlib import Path
@@ -21,6 +22,7 @@ pose=True
 dp=True
 dp_gma=True
 per_frame=True
+use_scales=True
 
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
@@ -29,14 +31,19 @@ if len(sys.argv) > 1:
 depth_dataset_path="../MPI-Sintel-depth-training-20150305/"
 if pose:
     src_path="./data/FN/"+name+"/clean/"
+    scales_path=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
 else:
     src_path="./data/FN_wo_pose/"+name+"/clean/"
+    scales_path=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
 if gma:
     gma_path="./data/GMA/"+name+"/clean/"
+    scales_path_gma=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
 if dp:
     dp_path="./data/FN_DP/"+name+"/clean/"
+    scales_path_dp=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
 if dp_gma:
     gma_dp_path="./data/GMA_DP/"+name+"/clean/"
+    scales_path_gma_dp=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
 
 
 output_path=os.path.join(src_path,"evaluation")
@@ -84,6 +91,9 @@ os.makedirs(norm_gma_dp_error_vis_path, exist_ok=True)
 gma_dp_error_vis_path=os.path.join(output_path,"error_visualization_gma_dp")
 os.makedirs(gma_dp_error_vis_path, exist_ok=True)
 
+
+
+
 for bs in batch_size: 
     depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
     if os.path.isfile(depth_path+"/frame_0001.dpt"):
@@ -109,6 +119,20 @@ truth_viz_path=os.path.join(depth_dataset_path,"training/dept_viz_col/")
 os.makedirs(truth_viz_path, exist_ok=True)
 truth_viz_path=os.path.join(truth_viz_path,name)
 os.makedirs(truth_viz_path, exist_ok=True)
+
+def parse_scales(path):
+    global use_scales
+    scales=[]
+    with open(path) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        for row in csv_reader:
+            scales.append(float(row[1]))
+    if len(scales)!=50:
+        print("WARNING no/invalid file at "+path)
+        print("SCALES DISABLED!")
+        use_scales=False
+
+    return scales
 
 def depth_read(filename): #Copied from sintel_io.py from http://sintel.is.tue.mpg.de/depth
     """ Read depth data from file, return as numpy array. """
@@ -151,6 +175,14 @@ depth_truth_fmt = os.path.join(depth_truth_dir, "frame_{:06d}")
 depth_error_dir= os.path.join(depth_path,"depth_error")
 depth_error_fmt = os.path.join(depth_error_dir, "frame_{:06d}")
 
+#Read scales:
+scales=parse_scales(scales_path)
+if gma:
+    scales_gma=parse_scales(scales_path_gma)
+if dp:
+    scales_dp=parse_scales(scales_path_dp)
+if dp_gma:
+    scales_gma_dp=parse_scales(scales_path_gma_dp)
 
 
 #Calculate statistical scale factor:
@@ -161,17 +193,25 @@ scale_factor_dp=[]
 scale_factor_gma_dp=[]
 files = os.listdir(truth_path)
 files.sort()
-for file in files: #["frame_0001.dpt"]:
+for i, file in enumerate(files): #["frame_0001.dpt"]:
     truth = depth_read(os.path.join(truth_path, file))
     depth = depth_read(os.path.join(depth_path, file))
+    if use_scales:
+        depth*=scales[i]
     truth[truth == 100000000000.0] = np.nan
     truth = resize(truth, depth.shape)
     if gma:
         depth_gma = depth_read(os.path.join(depth_gma_path, file))
+        if use_scales:
+            depth_gma*=scales_gma[i]
     if dp:
         depth_dp = depth_read(os.path.join(depth_dp_path, file))
+        if use_scales:
+            depth_dp*=scales_dp[i]
     if dp_gma:
         depth_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
+        if use_scales:
+            depth_gma_dp*=scales_gma_dp[i]
 
     #depth = resize(depth, truth.shape)
     depth_initial = depth_read(os.path.join(initial_path, file))
@@ -220,9 +260,11 @@ ml1_gma_dp =[]
 mse_gma_dp =[]
 ml1_norm_gma_dp=[]
 mse_norm_gma_dp=[]
-for file in files: #["frame_0001.dpt"]:
+for i, file in enumerate(files): #["frame_0001.dpt"]:
     truth = depth_read(os.path.join(truth_path, file))
     depth = depth_read(os.path.join(depth_path, file))
+    if use_scales:
+            depth*=scales[i]
     #depth = resize(depth, truth.shape)
     depth_initial = depth_read(os.path.join(initial_path, file))
     truth[truth == 100000000000.0] = np.nan
@@ -233,11 +275,17 @@ for file in files: #["frame_0001.dpt"]:
 
 
     if gma:
-        dept_gma = depth_read(os.path.join(depth_gma_path, file))
+        depth_gma = depth_read(os.path.join(depth_gma_path, file))
+        if use_scales:
+            depth_gma*=scales_gma[i]
     if dp:
-        dept_dp = depth_read(os.path.join(depth_dp_path, file))
+        depth_dp = depth_read(os.path.join(depth_dp_path, file))
+        if use_scales:
+            depth_dp*=scales_dp[i]
     if dp_gma:
-        dept_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
+        depth_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
+        if use_scales:
+            depth_gma_dp*=scales_gma_dp[i]
 
 
 
@@ -372,6 +420,8 @@ for file in files: #["frame_0001.dpt"]:
 
 #print(mse)
 print("Evaluation for scenario "+str(name))
+if use_scales:
+    print("Scales read")
 print("Results (Fine-Tuned):")
 aml1=np.nanmean(ml1)
 amse=np.nanmean(mse)
