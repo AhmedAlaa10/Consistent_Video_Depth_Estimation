@@ -21,7 +21,7 @@ TAG_CHAR = 'PIEH'
 
 fps = 7.5 #TODO
 name="shaman_3"
-batch_size=1 #TODO
+batch_size=2 #TODO
 render_obj=True
 scale=True
 scale_f=0.5
@@ -36,7 +36,7 @@ vis_mask=False
 
 use_gtruth=False #DEFAULT: False
 use_initial=False
-type= "FN"  #FN / GMA / ...
+type= "FN"  #FN / GMA / custom / ...
 norm=False
 obj_path=None #frames for obj  DEFAULT:None
 
@@ -47,6 +47,9 @@ start_index=0 #default=0
 
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
+    
+if len(sys.argv) > 2:
+    type = str(sys.argv[2])
 
 sintel_depth_path =  "../MPI-Sintel-depth-training-20150305" #TODO
 
@@ -189,7 +192,7 @@ for file in files: #["frame_0001.dpt"]:
         continue
 
     #Get camera data:
-    if len(os.listdir(src_cam_path))>0:
+    if os.path.isdir(src_cam_path) and len(os.listdir(src_cam_path))>0:
         frame_cam = file.split(".")[0]+".cam"
         I,E = cam_read(os.path.join(src_cam_path, frame_cam))
             # colmapintrinsic:      w  h   fx     fy      cx   cy   #Scale c with

@@ -22,6 +22,7 @@ batch_size_gma_dp=1
 gma=True
 pose=True
 dp=True
+per_frame=True
 
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
@@ -363,6 +364,8 @@ aml1=np.nanmean(ml1)
 amse=np.nanmean(mse)
 print("Ml1: "+str(aml1))
 print("MSE: "+str(amse))
+if per_frame:
+    print(mse)
 aml1_norm=np.nanmean(ml1_norm)
 amse_norm=np.nanmean(mse_norm)
 print("Ml1(norm): "+str(aml1_norm))
@@ -385,6 +388,8 @@ if dp:
     amse_dp=np.nanmean(mse_dp)
     print("Ml1: "+str(aml1_dp))
     print("MSE: "+str(amse_dp))
+    if per_frame:
+        print(mse_dp)
     aml1_norm_dp=np.nanmean(ml1_norm_dp)
     amse_norm_dp=np.nanmean(mse_norm_dp)
     print("Ml1(norm): "+str(aml1_norm_dp))

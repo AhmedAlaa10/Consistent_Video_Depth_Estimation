@@ -18,7 +18,7 @@ TAG_CHAR = 'PIEH'
 
 
 name="shaman_3"
-batch_size=1 #TODO
+batch_size=2 #TODO
 batch_size_gma=4
 batch_size_dp=2
 batch_size_gma_dp=1
@@ -31,10 +31,10 @@ not_norm=True
 init=False
 standart=True 
 gma=False
-dp=False
-accumulate=True
+dp=True
+accumulate=False
 rainbow=False
-interactive=True
+interactive=False
 
 start_index=0 #default=0
 
@@ -254,10 +254,11 @@ for file in files: #["frame_0001.dpt"]:
             truth = resize(truth, depth_initial.shape)
         elif gma:
             truth = resize(truth, depth_gma.shape)
-        if dp:
-            dept_dp = depth_read(os.path.join(depth_dp_path, file))
-        if gma and dp:
-            dept_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
+
+    if dp:
+        depth_dp = depth_read(os.path.join(depth_dp_path, file))
+    if gma and dp:
+        depth_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
 
         
 
@@ -328,12 +329,12 @@ for file in files: #["frame_0001.dpt"]:
 
     if standart:
         if not_norm:
-            depth_img_d=o3d.geometry.Image(depth)
-            pc_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_d, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
+            depth_img=o3d.geometry.Image(depth)
+            pc=o3d.geometry.PointCloud.create_from_depth_image(depth_img, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
 
         if norm:
-            depth_img_d_n=o3d.geometry.Image(depth_norm)
-            pc_d_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_d_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
+            depth_img_n=o3d.geometry.Image(depth_norm)
+            pc_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
 
     if init:
         if norm:
@@ -355,20 +356,20 @@ for file in files: #["frame_0001.dpt"]:
     if dp:
         if norm:
             depth_img_d_n=o3d.geometry.Image(depth_norm_dp)
-            pc_d_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
+            pc_d_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_d_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
 
         if not_norm:
             depth_img_d=o3d.geometry.Image(depth_dp)
-            pc_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
+            pc_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_d, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
 
     if gma and dp:
         if norm:
             depth_img_g_d_n=o3d.geometry.Image(depth_norm_gma_dp)
-            pc_g_d_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
+            pc_g_d_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g_d_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
 
         if not_norm:
             depth_img_g_d=o3d.geometry.Image(depth_gma_dp)
-            pc_g_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
+            pc_g_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g_d, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
 
     #intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5, 217.5)
     sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01, resolution=20, create_uv_map=False)
@@ -380,9 +381,9 @@ for file in files: #["frame_0001.dpt"]:
         pcs.append(pc_t)
     if standart:
         if not_norm:
-            pcs.append(pc_d)
+            pcs.append(pc)
         if norm:
-            pcs.append(pc_d_n)
+            pcs.append(pc_n)
     if init:
         if not_norm:
             pcs.append(pc_i)
@@ -413,10 +414,10 @@ for file in files: #["frame_0001.dpt"]:
     if standart:
         if not_norm and not rainbow:
             print("depth = light red")
-            pc_d.paint_uniform_color([1, 0, 0]) #red
+            pc.paint_uniform_color([1, 0, 0]) #red
         if norm and not rainbow:
             print("depth(norm) = dark red")
-            pc_d_n.paint_uniform_color([0.55, 0, 0]) #dark red
+            pc_n.paint_uniform_color([0.55, 0, 0]) #dark red
     if init:
         if not_norm and not rainbow:
             print("depth initial = light blue")
@@ -464,6 +465,7 @@ for file in files: #["frame_0001.dpt"]:
                 i+=1
         o3d.visualization.gui.Application.instance.run()
     else:
+        print(pcs)
         o3d.visualization.draw_geometries(pcs)
     
  
