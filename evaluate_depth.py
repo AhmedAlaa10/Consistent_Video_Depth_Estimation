@@ -16,13 +16,13 @@ TAG_CHAR = 'PIEH'
 
 
 name="shaman_3"
-batch_size=[4,3,2,1] #TODO
+batch_size=[1,2,3,4] #TODO
 gma=True
 pose=True
 dp=True
 dp_gma=True
 per_frame=True
-use_scales=True
+use_scales=False
 
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
