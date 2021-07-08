@@ -15,13 +15,11 @@ TAG_CHAR = 'PIEH'
 
 
 name="shaman_3"
-batch_size=2 #TODO
-batch_size_gma=4
-batch_size_dp=2
-batch_size_gma_dp=1
+batch_size=[4,3,2,1] #TODO
 gma=True
 pose=True
 dp=True
+dp_gma=True
 per_frame=True
 
 if len(sys.argv) > 1:
@@ -37,7 +35,7 @@ if gma:
     gma_path="./data/GMA/"+name+"/clean/"
 if dp:
     dp_path="./data/FN_DP/"+name+"/clean/"
-if dp and gma:
+if dp_gma:
     gma_dp_path="./data/GMA_DP/"+name+"/clean/"
 
 
@@ -52,6 +50,9 @@ if gma and not os.path.isdir(gma_path):
 if dp and not os.path.isdir(dp_path):
     print("DensePose depth folder ("+dp_path+") empty")
     dp=False
+if dp_gma and not os.path.isdir(gma_dp_path):
+    print("GMA DensePose depth folder ("+gma_dp_path+") empty")
+    dp_gma=False
 
 norm_error_vis_path=os.path.join(output_path,"error_visualization_norm")
 os.makedirs(norm_error_vis_path, exist_ok=True)
@@ -83,11 +84,23 @@ os.makedirs(norm_gma_dp_error_vis_path, exist_ok=True)
 gma_dp_error_vis_path=os.path.join(output_path,"error_visualization_gma_dp")
 os.makedirs(gma_dp_error_vis_path, exist_ok=True)
 
-depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size)+"_Oadam/exact_depth/")
+for bs in batch_size: 
+    depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
+    if os.path.isfile(depth_path+"/frame_0001.dpt"):
+        break
 initial_path=os.path.join(src_path,"depth_mc/exact_depth/")
-depth_gma_path=os.path.join(gma_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_gma)+"_Oadam/exact_depth/")
-depth_dp_path=os.path.join(dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_dp)+"_Oadam/exact_depth/")
-depth_gma_dp_path=os.path.join(gma_dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_gma_dp)+"_Oadam/exact_depth/")
+for bs in batch_size:
+    depth_gma_path=os.path.join(gma_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
+    if os.path.isfile(depth_gma_path+"/frame_0001.dpt"):
+        break
+for bs in batch_size:
+    depth_dp_path=os.path.join(dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
+    if os.path.isfile(depth_dp_path+"/frame_0001.dpt"):
+        break
+for bs in batch_size:
+    depth_gma_dp_path=os.path.join(gma_dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
+    if os.path.isfile(depth_gma_dp_path+"/frame_0001.dpt"):
+        break
 truth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
 
 
@@ -157,7 +170,7 @@ for file in files: #["frame_0001.dpt"]:
         depth_gma = depth_read(os.path.join(depth_gma_path, file))
     if dp:
         depth_dp = depth_read(os.path.join(depth_dp_path, file))
-    if gma and dp:
+    if dp_gma:
         depth_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
 
     #depth = resize(depth, truth.shape)
@@ -173,7 +186,7 @@ for file in files: #["frame_0001.dpt"]:
         scale_factor_gma.append(np.nanmean(truth)/np.nanmean(depth_gma))
     if dp:
         scale_factor_dp.append(np.nanmean(truth)/np.nanmean(depth_dp))
-    if gma and dp:
+    if dp_gma:
         scale_factor_gma_dp.append(np.nanmean(truth)/np.nanmean(depth_gma_dp))
 scale_factor= np.nanmean(scale_factor)
 scale_factor_initial= np.nanmean(scale_factor_initial)
@@ -181,7 +194,7 @@ if gma:
     scale_factor_gma= np.nanmean(scale_factor_gma)
 if dp:
     scale_factor_dp= np.nanmean(scale_factor_dp)
-if gma and dp:
+if dp_gma:
     scale_factor_gma_dp= np.nanmean(scale_factor_gma_dp)
 
 
@@ -223,7 +236,7 @@ for file in files: #["frame_0001.dpt"]:
         dept_gma = depth_read(os.path.join(depth_gma_path, file))
     if dp:
         dept_dp = depth_read(os.path.join(depth_dp_path, file))
-    if gma and dp:
+    if dp_gma:
         dept_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
 
 
@@ -236,7 +249,7 @@ for file in files: #["frame_0001.dpt"]:
         depth_norm_gma = depth_gma * scale_factor_gma
     if dp:
         depth_norm_dp = depth_dp * scale_factor_dp
-    if gma and dp:
+    if dp_gma:
         depth_norm_gma_dp = depth_gma_dp * scale_factor_gma_dp
     
 
@@ -270,7 +283,7 @@ for file in files: #["frame_0001.dpt"]:
         ml1_norm_dp.append((np.abs(distance_norm_dp)).mean(axis=None))
         mse_norm_dp.append((np.square(distance_norm_dp)).mean(axis=None))
 
-    if gma and dp:
+    if dp_gma:
         distance_gma_dp = (truth - depth_gma_dp)
         distance_norm_gma_dp = (truth - depth_norm_gma_dp)
         ml1_gma_dp.append((np.abs(distance_gma_dp)).mean(axis=None))
@@ -336,7 +349,7 @@ for file in files: #["frame_0001.dpt"]:
         inv_depth =  np.divide(1., distance_norm_dp, out=np.zeros_like(distance_norm_dp), where=distance_norm_dp!=0)
         save_image(viz_path, inv_depth)
 
-    if gma and dp:
+    if dp_gma:
         #Error(gma_dp) vis:
         viz_path = os.path.join(gma_dp_error_vis_path, file.split(".")[0] + ".png") 
         distance_gma_dp+=1
@@ -395,7 +408,7 @@ if dp:
     print("Ml1(norm): "+str(aml1_norm_dp))
     print("MSE(norm): "+str(amse_norm_dp))
 
-if gma and dp:
+if dp_gma:
     print("\nResults (gma_dp):")
     aml1_gma_dp=np.nanmean(ml1_gma_dp)
     amse_gma_dp=np.nanmean(mse_gma_dp)
