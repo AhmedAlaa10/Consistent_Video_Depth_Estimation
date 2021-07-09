@@ -9,12 +9,13 @@ import numpy as np
 from PIL import Image
 from skimage.transform import resize
 import utils.image_io
+import cv2 #pip install cv2
 TAG_FLOAT = 202021.25
 TAG_CHAR = 'PIEH'
 
 
 
-
+dataset="sintel" #"sintel"/"RGBD"
 name="shaman_3"
 batch_size=[1,2,3,4] #TODO
 gma=True
@@ -27,8 +28,16 @@ use_scales=False
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
 
+if len(sys.argv) > 2:
+    dataset = str(sys.argv[2])
+
 #file_path="/home/umbra/Documents/MPI-Sintel-depth-training-20150305/training/depth/bamboo_2/frame_0001.dpt"
-depth_dataset_path="../MPI-Sintel-depth-training-20150305/"
+if dataset == "RGBD":
+    depth_dataset_path="../RGBD/"
+elif dataset == "sintel":
+    depth_dataset_path="../MPI-Sintel-depth-training-20150305/"
+else:
+    print('Only "sintel"/"RGBD" allowed for dataset')
 if pose:
     src_path="./data/FN/"+name+"/clean/"
     scales_path=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
@@ -111,7 +120,15 @@ for bs in batch_size:
     depth_gma_dp_path=os.path.join(gma_dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
     if os.path.isfile(depth_gma_dp_path+"/frame_0001.dpt"):
         break
-truth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
+
+if dataset == "RGBD":
+    folder_name="rgbd_dataset_freiburg"+str(name.split("_")[0][2:])+"_"+name.split("_")[1]
+    frames_path=os.path.join(depth_dataset_path,folder_name,"frames_for_cvd.txt")
+    truth_path=os.path.join(depth_dataset_path,folder_name,"/depth/")
+elif dataset == "sintel":
+    truth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
+else:
+    pass
 
 
 #Path for colored truth depth visualization:
@@ -152,6 +169,14 @@ def save_image(file_name, image): # Copied from utils/image_io.py from https://g
     image = Image.fromarray(image.astype("uint8"))
     image.save(file_name)
 
+def parse_frames(path=frames_path):
+    frames=[]
+    with open(path) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=' ')
+        for row in csv_reader:
+            frames.append(row[0])
+    return frames
+
 #depth = depth_read(depth_path)
 #print((depth).shape)
 #truth = depth_read(truth_path)
@@ -191,10 +216,23 @@ scale_factor_initial=[]
 scale_factor_gma=[]
 scale_factor_dp=[]
 scale_factor_gma_dp=[]
-files = os.listdir(truth_path)
-files.sort()
+if dataset == "RGBD":
+    files = parse_frames()
+elif dataset == "sintel":
+    files = os.listdir(truth_path)
+    files.sort()
+else:
+    pass
+
 for i, file in enumerate(files): #["frame_0001.dpt"]:
-    truth = depth_read(os.path.join(truth_path, file))
+    
+    if dataset == "RGBD":
+        truth = cv2.imread(os.path.join(truth_path, file+".png"))
+        truth/=5000.
+    elif dataset == "sintel":
+        truth = depth_read(os.path.join(truth_path, file))
+    else:
+        pass
     depth = depth_read(os.path.join(depth_path, file))
     if use_scales:
         depth*=scales[i]
@@ -263,7 +301,13 @@ mse_gma_dp =[]
 ml1_norm_gma_dp=[]
 mse_norm_gma_dp=[]
 for i, file in enumerate(files): #["frame_0001.dpt"]:
-    truth = depth_read(os.path.join(truth_path, file))
+    if dataset == "RGBD":
+        truth = cv2.imread(os.path.join(truth_path, file+".png"))
+        truth/=5000.
+    elif dataset == "sintel":
+        truth = depth_read(os.path.join(truth_path, file))
+    else:
+        pass
     depth = depth_read(os.path.join(depth_path, file))
     if use_scales:
             depth*=scales[i]
