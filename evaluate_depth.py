@@ -19,7 +19,7 @@ dataset="sintel" #"sintel"/"RGBD"
 name="shaman_3"
 batch_size=[1,2,3,4] #TODO
 gma=True
-pose=True
+pose=False
 dp=True
 dp_gma=True
 per_frame=True
@@ -124,7 +124,7 @@ for bs in batch_size:
 if dataset == "RGBD":
     folder_name="rgbd_dataset_freiburg"+str(name.split("_")[0][2:])+"_"+name.split("_")[1]
     frames_path=os.path.join(depth_dataset_path,folder_name,"frames_for_cvd.txt")
-    truth_path=os.path.join(depth_dataset_path,folder_name,"/depth/")
+    truth_path=os.path.join(depth_dataset_path,folder_name,"depth/")
 elif dataset == "sintel":
     truth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
 else:
@@ -177,6 +177,29 @@ def parse_frames(path=frames_path):
             frames.append(row[0])
     return frames
 
+def get_depth_frames(frames, path=truth_path ):
+    depth_frames=[]    
+    i=0
+    depth_files=os.listdir(path)
+    depth_files.sort()
+    for idx, file in enumerate(depth_files):
+        if i>=len(frames):
+            break
+        #if float(row[0])>float(frames[i])+0.1:
+        #    print("WARNING!: Camera extrinsics later than frame by "+str(float(row[0])-float(frames[i]))+" sec at index "+str(i)+"!")
+        #print(row[0][:-2])
+        #prnt(frames[i][:-4])
+        ts=file.split(".")[0]+"."+file.split(".")[1]
+        ts_b=depth_files[idx-1].split(".")[0]+"."+depth_files[idx-1].split(".")[1]
+        if float(ts) >= float(frames[i]):
+            if abs(float(ts) >= float(frames[i])) < abs(float(ts_b) >= float(frames[i])):
+                depth_frames.append(ts)
+            else:
+                depth_frames.append(ts_b)           
+            
+            i+=1
+    return depth_frames
+
 #depth = depth_read(depth_path)
 #print((depth).shape)
 #truth = depth_read(truth_path)
@@ -217,23 +240,31 @@ scale_factor_gma=[]
 scale_factor_dp=[]
 scale_factor_gma_dp=[]
 if dataset == "RGBD":
-    files = parse_frames()
+    frames = parse_frames()
+    depth_frames= get_depth_frames(frames)
+    files = ["frame_"+str(i+1).zfill(4)+".dpt" for i in range(50)]
 elif dataset == "sintel":
     files = os.listdir(truth_path)
     files.sort()
 else:
     pass
 
+
+
 for i, file in enumerate(files): #["frame_0001.dpt"]:
     
     if dataset == "RGBD":
-        truth = cv2.imread(os.path.join(truth_path, file+".png"))
+        frame = depth_frames[i]
+        #print(os.path.join(truth_path, frame+".png"))
+        truth = np.array(cv2.imread(os.path.join(truth_path, frame+".png"), cv2.IMREAD_UNCHANGED)).astype(float)
+        #print(np.mean(truth))
         truth/=5000.
     elif dataset == "sintel":
         truth = depth_read(os.path.join(truth_path, file))
     else:
         pass
     depth = depth_read(os.path.join(depth_path, file))
+    #print(np.mean(depth))
     if use_scales:
         depth*=scales[i]
     truth[truth == 100000000000.0] = np.nan
@@ -302,7 +333,10 @@ ml1_norm_gma_dp=[]
 mse_norm_gma_dp=[]
 for i, file in enumerate(files): #["frame_0001.dpt"]:
     if dataset == "RGBD":
-        truth = cv2.imread(os.path.join(truth_path, file+".png"))
+        frame = depth_frames[i]
+        #print(os.path.join(truth_path, frame+".png"))
+        truth = np.array(cv2.imread(os.path.join(truth_path, frame+".png"), cv2.IMREAD_UNCHANGED)).astype(float)
+        #print(np.mean(truth))
         truth/=5000.
     elif dataset == "sintel":
         truth = depth_read(os.path.join(truth_path, file))
