@@ -215,6 +215,8 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
 
     #depth = resize(depth, truth.shape)
     depth_initial = depth_read(os.path.join(initial_path, file))
+    if use_scales:
+        depth_initial*=scales[i]
 
 
     #depth_initial = resize(depth_initial, truth.shape)
@@ -267,6 +269,8 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
             depth*=scales[i]
     #depth = resize(depth, truth.shape)
     depth_initial = depth_read(os.path.join(initial_path, file))
+    if use_scales:
+            depth_initial*=scales[i]
     truth[truth == 100000000000.0] = np.nan
     truth = resize(truth, depth.shape)
     

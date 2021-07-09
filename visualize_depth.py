@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 from skimage.transform import resize
 import utils.image_io
-
+import csv
 import open3d as o3d #pip install open3d
 
 TAG_FLOAT = 202021.25
@@ -32,9 +32,11 @@ init=False
 standart=True 
 gma=False
 dp=True
+dp_gma=False
 accumulate=False
 rainbow=False
 interactive=False
+use_scales=True
 
 start_index=0 #default=0
 
@@ -53,6 +55,21 @@ gma_path="./data/GMA/"+name+"/clean/"
 dp_path="./data/FN_DP/"+name+"/clean/"
 gma_dp_path="./data/GMA_DP/"+name+"/clean/"
 
+if is_pose:
+    src_path="./data/FN/"+name+"/clean/"
+    scales_path=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
+else:
+    src_path="./data/FN_wo_pose/"+name+"/clean/"
+    scales_path=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
+
+gma_path="./data/GMA/"+name+"/clean/"
+scales_path_gma=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
+
+dp_path="./data/FN_DP/"+name+"/clean/"
+scales_path_dp=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
+
+gma_dp_path="./data/GMA_DP/"+name+"/clean/"
+scales_path_gma_dp=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
 
 #Dont change after here
 #----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -64,7 +81,9 @@ if gma and not os.path.isdir(gma_path):
 if dp and not os.path.isdir(dp_path):
     print("DensePose depth folder ("+dp_path+") empty")
     dp=False
-
+if dp_gma and not os.path.isdir(gma_dp_path):
+    print("GMA DensePose depth folder ("+gma_dp_path+") empty")
+    dp_gma=False
 
 depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size)+"_Oadam/exact_depth/")
 initial_path=os.path.join(src_path,"depth_mc/exact_depth/")
@@ -80,6 +99,20 @@ if gtruth and viz:
     os.makedirs(truth_viz_path, exist_ok=True)
     truth_viz_path=os.path.join(truth_viz_path,name)
     os.makedirs(truth_viz_path, exist_ok=True)
+
+def parse_scales(path):
+    global use_scales
+    scales=[]
+    with open(path) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        for row in csv_reader:
+            scales.append(float(row[1]))
+    if len(scales)!=50:
+        print("WARNING no/invalid file at "+path)
+        print("SCALES DISABLED!")
+        use_scales=False
+
+    return scales
 
 def depth_read(filename): #Copied from sintel_io.py from http://sintel.is.tue.mpg.de/depth
     """ Read depth data from file, return as numpy array. """
@@ -139,6 +172,15 @@ depth_truth_fmt = os.path.join(depth_truth_dir, "frame_{:06d}")
 depth_error_dir= os.path.join(depth_path,"depth_error")
 depth_error_fmt = os.path.join(depth_error_dir, "frame_{:06d}")
 
+#Read scales:
+scales=parse_scales(scales_path)
+
+scales_gma=parse_scales(scales_path_gma)
+
+scales_dp=parse_scales(scales_path_dp)
+
+scales_gma_dp=parse_scales(scales_path_gma_dp)
+
 if gtruth:
     files = os.listdir(truth_path)
 elif standart:
@@ -155,17 +197,25 @@ if (gtruth or norm) and standart:
     scale_factor_gma_dp=[]
 
     files.sort()
-    for file in files: #["frame_0001.dpt"]:
+    for i, file in enumerate(files): #["frame_0001.dpt"]:
         truth = depth_read(os.path.join(truth_path, file))
         depth = depth_read(os.path.join(depth_path, file))
+        if use_scales:
+            depth*=scales[i]
         truth[truth == 100000000000.0] = np.nan
         truth = resize(truth, depth.shape)
         if gma:
             depth_gma = depth_read(os.path.join(depth_gma_path, file))
+            if use_scales:
+                depth_gma*=scales_gma[i]
         if dp:
             depth_dp = depth_read(os.path.join(depth_dp_path, file))
-        if gma and dp:
+            if use_scales:
+                depth_dp*=scales_dp[i]
+        if dp_gma:
             depth_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
+            if use_scales:
+                depth_gma_dp*=scales_gma_dp[i]
 
         #depth = resize(depth, truth.shape)
         depth_initial = depth_read(os.path.join(initial_path, file))
@@ -180,7 +230,7 @@ if (gtruth or norm) and standart:
             scale_factor_gma.append(np.nanmean(truth)/np.nanmean(depth_gma))
         if dp:
             scale_factor_dp.append(np.nanmean(truth)/np.nanmean(depth_dp))
-        if gma and dp:
+        if dp_gma:
             scale_factor_gma_dp.append(np.nanmean(truth)/np.nanmean(depth_gma_dp))
 
     scale_factor= np.nanmean(scale_factor)
@@ -189,7 +239,7 @@ if (gtruth or norm) and standart:
         scale_factor_gma= np.nanmean(scale_factor_gma)
     if dp:
         scale_factor_dp= np.nanmean(scale_factor_dp)
-    if gma and dp:
+    if dp_gma:
         scale_factor_gma_dp= np.nanmean(scale_factor_gma_dp)
 
 #Compute distance:
@@ -214,11 +264,11 @@ mse_gma_dp =[]
 ml1_norm_gma_dp=[]
 mse_norm_gma_dp=[]
 pcs_acc=[]
-i=1
+ix=1
 for file in files: #["frame_0001.dpt"]:
 
-    if i < start_index:
-        i+=1
+    if ix < start_index:
+        ix+=1
         continue
 
     #Get camera data:
@@ -242,9 +292,13 @@ for file in files: #["frame_0001.dpt"]:
         
     if standart:
         depth = depth_read(os.path.join(depth_path, file))
+        if use_scales:
+            depth*=scales[i]
     #depth = resize(depth, truth.shape)
     if init:
         depth_initial = depth_read(os.path.join(initial_path, file))
+        if use_scales:
+            depth_initial*=scales[i]
     if gtruth:
         truth = depth_read(os.path.join(truth_path, file))
         truth[truth == 100000000000.0] = np.nan
@@ -255,18 +309,18 @@ for file in files: #["frame_0001.dpt"]:
         elif gma:
             truth = resize(truth, depth_gma.shape)
 
+    if gma:
+        depth_gma = depth_read(os.path.join(depth_gma_path, file))
+        if use_scales:
+            depth_gma*=scales_gma[i]
     if dp:
         depth_dp = depth_read(os.path.join(depth_dp_path, file))
-    if gma and dp:
+        if use_scales:
+            depth_dp*=scales_dp[i]
+    if dp_gma:
         depth_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
-
-        
-
-    #depth_initial = resize(depth_initial, truth.shape)
-
-
-    if gma:
-        dept_gma = depth_read(os.path.join(depth_gma_path, file))
+        if use_scales:
+            depth_gma_dp*=scales_gma_dp[i]
 
 
     if (gtruth or norm) and standart:   
@@ -278,7 +332,7 @@ for file in files: #["frame_0001.dpt"]:
             depth_norm_gma = depth_gma * scale_factor_gma
         if dp:
             depth_norm_dp = depth_dp * scale_factor_dp
-        if gma and dp:
+        if dp_gma:
             depth_norm_gma_dp = depth_gma_dp * scale_factor_gma_dp
         
 
@@ -312,7 +366,7 @@ for file in files: #["frame_0001.dpt"]:
             ml1_norm_dp.append((np.abs(distance_norm_dp)).mean(axis=None))
             mse_norm_dp.append((np.square(distance_norm_dp)).mean(axis=None))
 
-        if gma and dp:
+        if dp_gma:
             distance_gma_dp = (truth - depth_gma_dp)
             distance_norm_gma_dp = (truth - depth_norm_gma_dp)
             ml1_gma_dp.append((np.abs(distance_gma_dp)).mean(axis=None))
@@ -362,7 +416,7 @@ for file in files: #["frame_0001.dpt"]:
             depth_img_d=o3d.geometry.Image(depth_dp)
             pc_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_d, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
 
-    if gma and dp:
+    if dp_gma:
         if norm:
             depth_img_g_d_n=o3d.geometry.Image(depth_norm_gma_dp)
             pc_g_d_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g_d_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
@@ -399,7 +453,7 @@ for file in files: #["frame_0001.dpt"]:
             pcs.append(pc_d)
         if norm:
             pcs.append(pc_d_n)
-    if gma and dp:
+    if dp_gma:
         if not_norm:
             pcs.append(pc_g_d)
         if norm:
@@ -439,7 +493,7 @@ for file in files: #["frame_0001.dpt"]:
         if norm and not rainbow:
             print("depth dp(norm) = black")
             pc_d_n.paint_uniform_color([0., 0., 0.]) #black
-    if gma and dp:
+    if dp_gma:
         if not_norm and not rainbow:
             print("depth gma dp = yellow")
             pc_g_d.paint_uniform_color([1, 0.706, 0]) #yellow
@@ -461,8 +515,8 @@ for file in files: #["frame_0001.dpt"]:
         mat.shader = 'defaultUnlit'
         for pc in pcs: 
                 print("added pc")
-                w.add_geometry(str(i),pc,mat)
-                i+=1
+                w.add_geometry(str(ix),pc,mat)
+                ix+=1
         o3d.visualization.gui.Application.instance.run()
     else:
         print(pcs)
@@ -471,7 +525,7 @@ for file in files: #["frame_0001.dpt"]:
  
     if accumulate:
         pcs_acc+=pcs
-    i+=1
+    ix+=1
 
 
 

@@ -9,7 +9,7 @@ from PIL import Image
 from skimage.transform import resize
 import utils.image_io
 import copy
-
+import csv
 import open3d as o3d #pip install open3d
 import open3d.visualization.rendering as rendering
 import cv2 #pip install cv2
@@ -21,9 +21,10 @@ TAG_CHAR = 'PIEH'
 
 fps = 7.5 #TODO
 name="shaman_3"
-batch_size=2 #TODO
+batch_size=[1,2,3,4] 
 render_obj=True
-scale=True
+use_scales=True
+scale=False
 scale_f=0.5
 
 preview=False
@@ -66,6 +67,7 @@ os.makedirs(output_path, exist_ok=True)
 mask_path=os.path.join(src_path,"render_masks")
 os.makedirs(mask_path, exist_ok=True)
 
+scales_path=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
 
 #Dont change after here
 #----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -81,8 +83,25 @@ if use_gtruth:
 elif use_initial:
     depth_path=os.path.join(src_path,"depth_mc/exact_depth/")
 else:
-    depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size)+"_Oadam/exact_depth/")
+    for bs in batch_size: 
+        depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
+        if os.path.isfile(depth_path+"/frame_0001.dpt"):
+            break
 truth_path=os.path.join(sintel_depth_path,"training/depth/"+name+"/")
+
+def parse_scales(path):
+    global use_scales
+    scales=[]
+    with open(path) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        for row in csv_reader:
+            scales.append(float(row[1]))
+    if len(scales)!=50:
+        print("WARNING no/invalid file at "+path)
+        print("SCALES DISABLED!")
+        use_scales=False
+
+    return scales
 
 def depth_read(filename): #Copied from sintel_io.py from http://sintel.is.tue.mpg.de/depth
     """ Read depth data from file, return as numpy array. """
@@ -144,7 +163,7 @@ def video_from_frames(pathIn,pathOut): #Adapted from: https://medium.com/@iKhush
         out.write(frame_array[i])
     out.release()   
 
-
+scales=parse_scales(scales_path)
 
 files = os.listdir(depth_path)
 files.sort()
@@ -153,9 +172,11 @@ if norm:
     #Calculate statistical scale factor:
     scale_factor_n=[]
 
-    for file in files: #["frame_0001.dpt"]:
+    for i, file in enumerate(files): #["frame_0001.dpt"]:
         truth = depth_read(os.path.join(truth_path, file))
         depth = depth_read(os.path.join(depth_path, file))
+        if use_scales:
+            depth*=scales[i]
         truth[truth == 100000000000.0] = np.nan
         truth = resize(truth, depth.shape)   
 
@@ -167,8 +188,10 @@ if scale:
     #Calculate statistical scale factor:
     scale_factor=[]
 
-    for file in files: #["frame_0001.dpt"]:
+    for i, file in enumerate(files): #["frame_0001.dpt"]:
         depth = depth_read(os.path.join(depth_path, file))
+        if use_scales:
+            depth*=scales[i]
         if norm:           
             depth= depth * scale_factor_n 
         scale_factor.append(np.nanmean(depth))  
@@ -184,11 +207,11 @@ ml1 =[]
 mse =[]
 ml1_norm=[]
 mse_norm=[]
-i=1
-for file in files: #["frame_0001.dpt"]:
+ix=1
+for i, file in enumerate(files): #["frame_0001.dpt"]:
 
-    if i < start_index:
-        i+=1
+    if ix < start_index:
+        ix+=1
         continue
 
     #Get camera data:
@@ -213,6 +236,8 @@ for file in files: #["frame_0001.dpt"]:
         
    
     depth = depth_read(os.path.join(depth_path, file))
+    if use_scales:
+        depth*=scales[i]
     if scale:
         depth*=scale_factor 
 
@@ -286,8 +311,8 @@ for file in files: #["frame_0001.dpt"]:
         mat.shader = 'defaultUnlit'
         for pc in pcs: 
                 print("added pc")
-                w.add_geometry(str(i),pc,mat)
-                i+=1
+                w.add_geometry(str(ix),pc,mat)
+                ix+=1
         o3d.visualization.gui.Application.instance.run()
         #o3d.visualization.gui.Application.instance.quit()
         #w.export_current_image("test.png")
@@ -315,8 +340,8 @@ for file in files: #["frame_0001.dpt"]:
 
         for pc in pcs: 
             #print("added pc")
-            renderer.scene.add_geometry(str(i),pc,mat)
-            i+=1
+            renderer.scene.add_geometry(str(ix),pc,mat)
+            ix+=1
         img_obj = renderer.render_to_image()    
         img_obj_np = np.array(img_obj)
         img_obj_cv = cv2.cvtColor(img_obj_np, cv2.COLOR_RGBA2BGRA)
@@ -345,8 +370,8 @@ for file in files: #["frame_0001.dpt"]:
 
         for pc in pcs: 
             #print("added pc")
-            renderer.scene.add_geometry(str(i),pc,mat)
-            i+=1
+            renderer.scene.add_geometry(str(ix),pc,mat)
+            ix+=1
         mask_rgb = renderer.render_to_image()    
         mask_rgb_cv = cv2.cvtColor(np.array(mask_rgb), cv2.COLOR_RGBA2BGRA)
         mask_rgb_np = np.array(mask_rgb)
@@ -414,7 +439,7 @@ for file in files: #["frame_0001.dpt"]:
 
     if accumulate:
         pcs_acc+=pcs
-    i+=1
+    ix+=1
 
     #break #TODO: delete
 
