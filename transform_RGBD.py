@@ -13,11 +13,12 @@ import cv2 #TODO: pip install opencv-python
 import os
 from os.path import isfile, join
 from PIL import Image
+import csv
 
-name = "xyz" #TODO
-number=1 #1/2/3
+name = "teddy" #TODO
+number=3 #1/2/3 2,3 don't work because of distortion
 method="FN"
-
+num_frames=50
 #local:
 rgbd_path =  "../RGBD" #TODO
 
@@ -33,9 +34,9 @@ fps_input_vid = fps
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
 if len(sys.argv) > 2:
-    number = str(sys.argv[2])
+    method = str(sys.argv[2])
 if len(sys.argv) > 3:
-    method = str(sys.argv[3])
+    number = str(sys.argv[3])
 
 
 dest_path = "./data/"+method+"/" #TODO
@@ -56,55 +57,9 @@ Path(cam_path).mkdir(parents=True, exist_ok=True)
 cam_path = os.path.join(cam_path, "pose_init")
 Path(cam_path).mkdir(parents=True, exist_ok=True)
 
-folder_name="rgbd_datset_freiburg"+str(number)+"_"+name
+folder_name="rgbd_dataset_freiburg"+str(number)+"_"+name
 src_img_path = os.path.join(rgbd_path,folder_name ,"rgb")
-src_cam_path = os.path.join(rgbd_path,folder_name ,"groundtruth.txt")
-
-def cam_read(filename):  #Copied from sintel_io.py from http://sintel.is.tue.mpg.de/depth
-    """ Read camera data, return (M,N) tuple.
-    
-    M is the intrinsic matrix, N is the extrinsic matrix, so that
-
-    x = M*N*X,
-    with x being a point in homogeneous image pixel coordinates, X being a
-    point in homogeneous world coordinates.
-    """
-    f = open(filename,'rb')
-    check = np.fromfile(f,dtype=np.float32,count=1)[0]
-    M = np.fromfile(f,dtype='float64',count=9).reshape((3,3))
-    N = np.fromfile(f,dtype='float64',count=12).reshape((3,4))
-    return M,N
-
-def trace_method(matrix): #Copied from https://github.com/KieranWynn/pyquaternion/blob/master/pyquaternion/quaternion.py
-            """
-            This code uses a modification of the algorithm described in:
-            https://d3cw3dd2w32x2b.cloudfront.net/wp-content/uploads/2015/01/matrix-to-quat.pdf
-            which is itself based on the method described here:
-            http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/
-            Altered to work with the column vector convention instead of row vectors
-            """
-            m = matrix.conj().transpose() # This method assumes row-vector and postmultiplication of that vector
-            if m[2, 2] < 0:
-                if m[0, 0] > m[1, 1]:
-                    t = 1 + m[0, 0] - m[1, 1] - m[2, 2]
-                    q = [m[1, 2]-m[2, 1],  t,  m[0, 1]+m[1, 0],  m[2, 0]+m[0, 2]]
-                else:
-                    t = 1 - m[0, 0] + m[1, 1] - m[2, 2]
-                    q = [m[2, 0]-m[0, 2],  m[0, 1]+m[1, 0],  t,  m[1, 2]+m[2, 1]]
-            else:
-                if m[0, 0] < -m[1, 1]:
-                    t = 1 - m[0, 0] - m[1, 1] + m[2, 2]
-                    q = [m[0, 1]-m[1, 0],  m[2, 0]+m[0, 2],  m[1, 2]+m[2, 1],  t]
-                else:
-                    t = 1 + m[0, 0] + m[1, 1] + m[2, 2]
-                    q = [t,  m[1, 2]-m[2, 1],  m[2, 0]-m[0, 2],  m[0, 1]-m[1, 0]]
-
-            q = np.array(q).astype('float64')
-            q *= 0.5 / sqrt(t)
-            return q
-
-def quaternion_from_matrix(matrix):
-    return trace_method(matrix)
+src_path = os.path.join(rgbd_path,folder_name)
 
 def video_from_frames(): #Adapted from: https://medium.com/@iKhushPatel/convert-video-to-images-images-to-video-using-opencv-python-db27a128a481
     pathIn= img_path
@@ -132,25 +87,56 @@ def video_from_frames(): #Adapted from: https://medium.com/@iKhushPatel/convert-
         # writing to a image array
         out.write(frame_array[i])
     out.release()
-    
+
+def parse_frames(path=os.path.join(src_path,"frames_for_cvd.txt")):
+    frames=[]
+    with open(path) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=' ')
+        for row in csv_reader:
+            frames.append(row[0])
+    if len(frames)!=num_frames:
+        print("WARNING: number_of_frames doesn't match number of frames in:"+path)
+    return frames
+
+#Reads extrinsics from RGBD dataset and returns array of [tx ty tz qx qy qz qw] for index-corresponding name in frames:
+def parse_extrinsics(frames, path=os.path.join(src_path,"groundtruth.txt")):
+    extrinsics=[]
+    with open(path) as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=' ')
+        i=0
+        for row in csv_reader:
+            if i>=num_frames:
+                break
+            if row[0]!="#" and float(row[0])>float(frames[i])+0.1:
+                print("WARNING!: Camera extrinsics later than frame by "+str(float(row[0])-float(frames[i]))+" sec at index "+str(i)+"!")
+            #print(row[0][:-2])
+            #print(frames[i][:-4])
+            if row[0]!="#" and float(row[0]) >= float(frames[i]):
+                print(frames[i]+":"+row[0])
+                extrinsics.append([row[1],row[2],row[3],row[4],row[5],row[6],row[7]])
+                i+=1
+            
+    if len(extrinsics)!=num_frames:
+        print("WARNING: number_of_frames doesn't match number of frames in:"+path+"("+str(len(extrinsics))+")")
+    #print(extrinsics)
+    return extrinsics
 #os.chdir(path)
 #print(os.listdir("."))
 width, height = (None,None)
 # Copy and rename images:
-if len(listdir(img_path))==0:
-    files = listdir(src_img_path)
-    for file in files:
-        split1 = file.split("_")
-        split2 = split1[1].split(".")
-        index = int(split2[0])-1
-        index =str(index).zfill(6)
-        file_new = str(split1[0]+"_"+index+".png") 
+frames = parse_frames()
+if len(listdir(img_path))==0:    
+    for i, file in enumerate(frames):
+        index =str(i).zfill(6)
+        file_new = str("frame_"+index+".png") 
         #print(file_new)
         #copyfile(os.path.join(src_img_path, file), os.path.join(img_path, file_new))
-        im = Image.open(os.path.join(src_img_path, file))
+        im = Image.open(os.path.join(src_img_path, file+".png"))
         im.save(os.path.join(img_path, file_new), "PNG")
         if width is None:
             width, height = im.size
+
+
 
 
 # Copy and transform cam data:
@@ -161,59 +147,46 @@ if len(listdir(cam_path))==0:
     points3D_file.close()
     frames_file = open(os.path.join(dest_path, "frames.txt"),"w")
 
-    frame_cams = listdir(src_cam_path)
-    frame_cams.sort()
-    cams =[]
-    for i , frame_cam in enumerate(frame_cams):
-        I,E = cam_read(os.path.join(src_cam_path, frame_cam))
-        print(frame_cam)
+    #TODO: use ROS default instead? https://vision.in.tum.de/data/datasets/rgbd-dataset/file_formats
+    #Save camera intrinsics
+    if number==1: 
+        print("WARNING: Invalid results, because colmap can't model distortion! Use Freiburg3 only")
+        line = str(1)+" "+"PINHOLE"+" "+str(width)+" "+str(height)+" "+str(517.3)+" "+str(516.5)+" "+str(318.6)+" "+str(255.3)+"\n" 
+    elif number==2:
+        print("WARNING: Invalid results, because colmap can't model distortion! Use Freiburg3 only")
+        line = str(1)+" "+"PINHOLE"+" "+str(width)+" "+str(height)+" "+str(520.9)+" "+str(521.0)+" "+str(325.1)+" "+str(249.7)+"\n"
+    elif number==3: 
+        line = str(1)+" "+"PINHOLE"+" "+str(width)+" "+str(height)+" "+str(535.4)+" "+str(539.2)+" "+str(320.1)+" "+str(247.6)+"\n"
+    else:
+        print("Only number=3 allowed")
+    
+    cameras_file.write(line)
+    cameras_file.close()
+    print("OK")
+    frames_ex = parse_extrinsics(frames)      
+    for i , frame_ex in enumerate(frames_ex):
+         
+        cam_id=1       
 
-        #if I not in cams:
-        #    cams.append(I)
-        #cam_id = cams.index(I)+1
-        cam_id=-1
-        new = True
-        for j, cam in enumerate(cams):
-            if (I==cam).all():
-                new =False
-                cam_id =j +1
-                break
-        if new:
-            cam_id = len(cams) +1
-            cams.append(I)
-        
+        index =str(i).zfill(6)
+        file_new = str("frame_"+index+".png") 
+        print(file_new)
 
-
-        split1 = frame_cam.split("_")
-        split2 = split1[1].split(".")
-        index = int(split2[0])-1
-        index =str(index).zfill(6)
-        frame_name = str(split1[0]+"_"+index+".png") 
-
-        R = np.delete(E, np.s_[3], axis=1)
-        q = quaternion_from_matrix(matrix=R)
-        line = str(i+1)+" "+str(q[0])+" "+str(q[1])+" "+str(q[2])+" "+str(q[3])+" "+str(E[0,3])+" "+str(E[1,3])+" "+str(E[2,3])+" "+str(cam_id)+" "+frame_name+"\n" +"\n" #TODO: remove one  \n?
+        line = str(i+1)+" "+str(frame_ex[3])+" "+str(frame_ex[4])+" "+str(frame_ex[5])+" "+str(frame_ex[6])+" "+str(frame_ex[0])+" "+str(frame_ex[1])+" "+str(frame_ex[2])+" "+str(cam_id)+" "+file_new+"\n" +"\n" #TODO: remove one  \n?
         images_file.write(line)
 
-    images_file.close()
+    images_file.close()        
 
-    for i , I in enumerate(cams):
-        line = str(i+1)+" "+"PINHOLE"+" "+str(width)+" "+str(height)+" "+str(I[0,0])+" "+str(I[1,1])+" "+str(I[0,2])+" "+str(I[1,2])+"\n" 
-        cameras_file.write(line)
-
-    cameras_file.close()
-
-    number_of_frames=len(frame_cams)
-    line = str(number_of_frames)+"\n"
+    line = str(num_frames)+"\n"
     frames_file.write(line)
     line = str(width)+"\n"
     frames_file.write(line)
     line = str(height)+"\n"
     frames_file.write(line)
 
-    step_size=(float(number_of_frames)/float(fps))/float(number_of_frames)
+    step_size=(float(num_frames)/float(fps))/float(num_frames)
     time= 0.
-    for i in range(number_of_frames):
+    for i in range(num_frames):
         line = str(time)+"\n"        
         frames_file.write(line)
         time+=step_size
