@@ -19,11 +19,11 @@ dataset="sintel" #"sintel"/"RGBD"
 name="shaman_3"
 batch_size=[1,2,3,4] #TODO
 gma=True
-pose=False
+pose=True
 dp=True
 dp_gma=True
 per_frame=True
-use_scales=False
+use_scales=True
 
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
@@ -100,6 +100,8 @@ os.makedirs(norm_gma_dp_error_vis_path, exist_ok=True)
 gma_dp_error_vis_path=os.path.join(output_path,"error_visualization_gma_dp")
 os.makedirs(gma_dp_error_vis_path, exist_ok=True)
 
+diff_human_vis_path=os.path.join(output_path,"human_diff_visualization")
+os.makedirs(diff_human_vis_path, exist_ok=True)
 
 
 
@@ -122,10 +124,16 @@ for bs in batch_size:
         break
 
 if dataset == "RGBD":
-    folder_name="rgbd_dataset_freiburg"+str(name.split("_")[0][2:])+"_"+name.split("_")[1]
+    split = name.split("_")
+    folder_name="rgbd_dataset_freiburg"+str(split[0][2:])
+    i=1
+    while i < len(split):
+        folder_name+="_"+split[i]
+        i+=1        
     frames_path=os.path.join(depth_dataset_path,folder_name,"frames_for_cvd.txt")
     truth_path=os.path.join(depth_dataset_path,folder_name,"depth/")
 elif dataset == "sintel":
+    frames_path=""
     truth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
 else:
     pass
@@ -144,7 +152,7 @@ def parse_scales(path):
         csv_reader = csv.reader(csv_file, delimiter=',')
         for row in csv_reader:
             scales.append(float(row[1]))
-    if len(scales)!=50:
+    if len(scales)==0:
         print("WARNING no/invalid file at "+path)
         print("SCALES DISABLED!")
         use_scales=False
@@ -478,6 +486,15 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
         distance_norm_dp.squeeze()
         inv_depth =  np.divide(1., distance_norm_dp, out=np.zeros_like(distance_norm_dp), where=distance_norm_dp!=0)
         save_image(viz_path, inv_depth)
+
+        #Dif vis human:
+        viz_path = os.path.join(diff_human_vis_path, file.split(".")[0] + ".png") 
+        distance_=np.abs(depth-depth_dp)
+        distance_+=1
+        distance_.squeeze()
+        inv_depth =  np.divide(1., distance_, out=np.zeros_like(distance_), where=distance_!=0)
+        save_image(viz_path, inv_depth)
+        
 
     if dp_gma:
         #Error(gma_dp) vis:

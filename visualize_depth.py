@@ -25,20 +25,20 @@ batch_size_gma_dp=1
 is_pose=True
 viz=True
 
-gtruth=True
+gtruth=False
 norm=False
 not_norm=True
 init=False
 standart=True 
 gma=False
-dp=True
+dp=False
 dp_gma=False
-accumulate=False
+accumulate=True
 rainbow=False
-interactive=False
-use_scales=True
+interactive=True
+use_scales=False
 
-start_index=0 #default=0
+start_index=49 #default=0
 
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
@@ -265,7 +265,7 @@ ml1_norm_gma_dp=[]
 mse_norm_gma_dp=[]
 pcs_acc=[]
 ix=1
-for file in files: #["frame_0001.dpt"]:
+for i, file in enumerate(files): #["frame_0001.dpt"]:
 
     if ix < start_index:
         ix+=1
@@ -521,6 +521,7 @@ for file in files: #["frame_0001.dpt"]:
     else:
         print(pcs)
         o3d.visualization.draw_geometries(pcs)
+        
     
  
     if accumulate:
