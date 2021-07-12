@@ -44,15 +44,15 @@ if pose:
 else:
     src_path="./data/FN_wo_pose/"+name+"/clean/"
     scales_path=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
-if gma:
-    gma_path="./data/GMA/"+name+"/clean/"
-    scales_path_gma=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
-if dp:
-    dp_path="./data/FN_DP/"+name+"/clean/"
-    scales_path_dp=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
-if dp_gma:
-    gma_dp_path="./data/GMA_DP/"+name+"/clean/"
-    scales_path_gma_dp=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
+
+gma_path="./data/GMA/"+name+"/clean/"
+scales_path_gma=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
+
+dp_path="./data/FN_DP/"+name+"/clean/"
+scales_path_dp=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
+
+gma_dp_path="./data/GMA_DP/"+name+"/clean/"
+scales_path_gma_dp=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
 
 
 output_path=os.path.join(src_path,"evaluation")
@@ -150,13 +150,19 @@ def parse_scales(path):
     scales=[]
     with open(path) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
+        i=0
         for row in csv_reader:
-            scales.append(float(row[1]))
+            while i!=int(float(row[0])):
+                scales.append(float(1.))
+                i+=1
+            
+            scales.append(float(row[1]))            
+            i+=1
     if len(scales)==0:
         print("WARNING no/invalid file at "+path)
         print("SCALES DISABLED!")
         use_scales=False
-
+    #print(scales)
     return scales
 
 def depth_read(filename): #Copied from sintel_io.py from http://sintel.is.tue.mpg.de/depth

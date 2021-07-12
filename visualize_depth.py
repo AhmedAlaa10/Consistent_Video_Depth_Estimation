@@ -18,27 +18,26 @@ TAG_CHAR = 'PIEH'
 
 
 name="shaman_3"
-batch_size=2 #TODO
-batch_size_gma=4
-batch_size_dp=2
-batch_size_gma_dp=1
+batch_size=[1,2,3,4] #TODO
 is_pose=True
 viz=True
 
-gtruth=False
+gtruth=True
 norm=False
 not_norm=True
 init=False
 standart=True 
 gma=False
-dp=False
+dp=True
 dp_gma=False
-accumulate=True
+accumulate=False
 rainbow=False
 interactive=True
-use_scales=False
+use_scales=True
+scale=True
+scale_f=0.1
 
-start_index=49 #default=0
+start_index=0 #default=0
 
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
@@ -85,11 +84,23 @@ if dp_gma and not os.path.isdir(gma_dp_path):
     print("GMA DensePose depth folder ("+gma_dp_path+") empty")
     dp_gma=False
 
-depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size)+"_Oadam/exact_depth/")
+for bs in batch_size: 
+    depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
+    if os.path.isfile(depth_path+"/frame_0001.dpt"):
+        break
 initial_path=os.path.join(src_path,"depth_mc/exact_depth/")
-depth_gma_path=os.path.join(gma_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_gma)+"_Oadam/exact_depth/")
-depth_dp_path=os.path.join(dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_dp)+"_Oadam/exact_depth/")
-depth_gma_dp_path=os.path.join(gma_dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(batch_size_gma_dp)+"_Oadam/exact_depth/")
+for bs in batch_size:
+    depth_gma_path=os.path.join(gma_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
+    if os.path.isfile(depth_gma_path+"/frame_0001.dpt"):
+        break
+for bs in batch_size:
+    depth_dp_path=os.path.join(dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
+    if os.path.isfile(depth_dp_path+"/frame_0001.dpt"):
+        break
+for bs in batch_size:
+    depth_gma_dp_path=os.path.join(gma_dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
+    if os.path.isfile(depth_gma_dp_path+"/frame_0001.dpt"):
+        break
 truth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
 
 
@@ -199,7 +210,11 @@ if (gtruth or norm) and standart:
     files.sort()
     for i, file in enumerate(files): #["frame_0001.dpt"]:
         truth = depth_read(os.path.join(truth_path, file))
+        if scale:
+            truth*=scale_f
         depth = depth_read(os.path.join(depth_path, file))
+        if scale:
+            depth*=scale_f
         if use_scales:
             depth*=scales[i]
         truth[truth == 100000000000.0] = np.nan
@@ -208,17 +223,27 @@ if (gtruth or norm) and standart:
             depth_gma = depth_read(os.path.join(depth_gma_path, file))
             if use_scales:
                 depth_gma*=scales_gma[i]
+            if scale:
+                depth_gma*=scale_f
         if dp:
             depth_dp = depth_read(os.path.join(depth_dp_path, file))
             if use_scales:
                 depth_dp*=scales_dp[i]
+            if scale:
+                depth_dp*=scale_f
         if dp_gma:
             depth_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
             if use_scales:
                 depth_gma_dp*=scales_gma_dp[i]
+            if scale:
+                depth_dp*=scale_f
 
         #depth = resize(depth, truth.shape)
         depth_initial = depth_read(os.path.join(initial_path, file))
+        if use_scales:
+            depth*=scales[i]
+        if scale:
+            depth_initial*=scale_f
 
 
         #depth_initial = resize(depth_initial, truth.shape)
@@ -294,13 +319,19 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
         depth = depth_read(os.path.join(depth_path, file))
         if use_scales:
             depth*=scales[i]
+        if scale:
+            depth*=scale_f
     #depth = resize(depth, truth.shape)
     if init:
         depth_initial = depth_read(os.path.join(initial_path, file))
         if use_scales:
             depth_initial*=scales[i]
+        if scale:
+            depth_initial*=scale_f
     if gtruth:
         truth = depth_read(os.path.join(truth_path, file))
+        if scale:
+            truth*=scale_f
         truth[truth == 100000000000.0] = np.nan
         if standart:
             truth = resize(truth, depth.shape)
@@ -308,19 +339,28 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
             truth = resize(truth, depth_initial.shape)
         elif gma:
             truth = resize(truth, depth_gma.shape)
+        elif dp:
+            truth = resize(truth, depth_dp.shape)
 
     if gma:
         depth_gma = depth_read(os.path.join(depth_gma_path, file))
         if use_scales:
             depth_gma*=scales_gma[i]
+        if scale:
+            depth_gma*=scale_f
+        
     if dp:
         depth_dp = depth_read(os.path.join(depth_dp_path, file))
         if use_scales:
             depth_dp*=scales_dp[i]
+        if scale:
+            depth_dp*=scale_f
     if dp_gma:
         depth_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
         if use_scales:
             depth_gma_dp*=scales_gma_dp[i]
+        if scale:
+            depth_gma_dp*=scale_f
 
 
     if (gtruth or norm) and standart:   
