@@ -19,11 +19,13 @@ dataset="sintel" #"sintel"/"RGBD"
 name="shaman_3"
 batch_size=[1,2,3,4] #TODO
 gma=True
-pose=True
+pose=True #TODO
 dp=True
 dp_gma=True
+cvd_dp=True
 per_frame=True
 use_scales=True
+
 
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
@@ -54,6 +56,9 @@ scales_path_dp=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
 gma_dp_path="./data/GMA_DP/"+name+"/clean/"
 scales_path_gma_dp=os.path.join(src_path,"R_hierarchical2_mc/scales.csv")
 
+depth_cvd_dp_path=os.path.join("./data/CVD_DP/",name,"exact_depth")
+#scales_path_cvd_dp=os.path.join("")
+
 
 output_path=os.path.join(src_path,"evaluation")
 os.makedirs(output_path, exist_ok=True)
@@ -69,6 +74,9 @@ if dp and not os.path.isdir(dp_path):
 if dp_gma and not os.path.isdir(gma_dp_path):
     print("GMA DensePose depth folder ("+gma_dp_path+") empty")
     dp_gma=False
+if cvd_dp and not os.path.isfile(depth_cvd_dp_path+"/frame_0001.dpt"):
+    print("GMA DensePose depth folder ("+depth_cvd_dp_path+") empty")
+    cvd_dp=False
 
 norm_error_vis_path=os.path.join(output_path,"error_visualization_norm")
 os.makedirs(norm_error_vis_path, exist_ok=True)
@@ -295,6 +303,8 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
         depth_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
         if use_scales:
             depth_gma_dp*=scales_gma_dp[i]
+    if cvd_dp:
+        depth_cvd_dp = depth_read(os.path.join(depth_cvd_dp_path, file))
 
     #depth = resize(depth, truth.shape)
     depth_initial = depth_read(os.path.join(initial_path, file))
@@ -345,6 +355,8 @@ ml1_gma_dp =[]
 mse_gma_dp =[]
 ml1_norm_gma_dp=[]
 mse_norm_gma_dp=[]
+ml1_cvd_dp =[]
+mse_cvd_dp =[]
 for i, file in enumerate(files): #["frame_0001.dpt"]:
     if dataset == "RGBD":
         frame = depth_frames[i]
@@ -382,7 +394,8 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
         depth_gma_dp = depth_read(os.path.join(depth_gma_dp_path, file))
         if use_scales:
             depth_gma_dp*=scales_gma_dp[i]
-
+    if cvd_dp:
+        depth_cvd_dp = depth_read(os.path.join(depth_cvd_dp_path, file))
 
 
     
@@ -434,6 +447,11 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
         mse_gma_dp.append((np.square(distance_gma_dp)).mean(axis=None))
         ml1_norm_gma_dp.append((np.abs(distance_norm_gma_dp)).mean(axis=None))
         mse_norm_gma_dp.append((np.square(distance_norm_gma_dp)).mean(axis=None))
+    
+    if cvd_dp:
+        distance_cvd_dp = (truth - depth_cvd_dp)
+        ml1_cvd_dp.append((np.abs(distance_cvd_dp)).mean(axis=None))
+        mse_cvd_dp.append((np.square(distance_cvd_dp)).mean(axis=None))
 
     #Error(norm) vis:
     viz_path = os.path.join(norm_error_vis_path, file.split(".")[0] + ".png") 
@@ -573,6 +591,14 @@ if dp_gma:
     amse_norm_gma_dp=np.nanmean(mse_norm_gma_dp)
     print("Ml1(norm): "+str(aml1_norm_gma_dp))
     print("MSE(norm): "+str(amse_norm_gma_dp))
+
+if cvd_dp:
+    print("\nResults (cvd_dp):")
+    aml1_cvd_dp=np.nanmean(ml1_cvd_dp)
+    amse_cvd_dp=np.nanmean(mse_cvd_dp)
+    print("Ml1: "+str(aml1_cvd_dp))
+    print("MSE: "+str(amse_cvd_dp))
+
 
 print("\nResults (Initial):")
 aml1_initial=np.nanmean(ml1_initial)

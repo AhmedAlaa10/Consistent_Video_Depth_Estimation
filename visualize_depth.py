@@ -26,10 +26,11 @@ gtruth=True
 norm=False
 not_norm=True
 init=False
-standart=True 
+standart=False 
 gma=False
-dp=True
+dp=False
 dp_gma=False
+cvd_dp=True
 accumulate=False
 rainbow=False
 interactive=True
@@ -101,6 +102,7 @@ for bs in batch_size:
     depth_gma_dp_path=os.path.join(gma_dp_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
     if os.path.isfile(depth_gma_dp_path+"/frame_0001.dpt"):
         break
+depth_cvd_dp_path=os.path.join("./data/CVD_DP/",name,"exact_depth")
 truth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
 
 
@@ -237,6 +239,11 @@ if (gtruth or norm) and standart:
                 depth_gma_dp*=scales_gma_dp[i]
             if scale:
                 depth_dp*=scale_f
+                
+        if cvd_dp:
+            depth_cvd_dp = depth_read(os.path.join(depth_cvd_dp_path, file))
+            if scale:
+                depth_cvd_dp*=scale_f
 
         #depth = resize(depth, truth.shape)
         depth_initial = depth_read(os.path.join(initial_path, file))
@@ -300,14 +307,14 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
     if len(os.listdir(src_cam_path))>0:
         frame_cam = file.split(".")[0]+".cam"
         I,E = cam_read(os.path.join(src_cam_path, frame_cam))
-        if init or standart or gma or dp:            
+        if init or standart or gma or dp or cvd_dp:            
             intrinsic=o3d.camera.PinholeCameraIntrinsic(384, 160, 1120.0*(384/1024), 1120.0*(160/436), 511.5*(384/1024) , 217.5*(160/436) )
         else:
             intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5 , 217.5 )
         extrinsic=E
     else:
         print("Extrinsics not available")
-        if init or standart or gma or dp:            
+        if init or standart or gma or dp or cvd_dp:            
             intrinsic=o3d.camera.PinholeCameraIntrinsic(384, 160, 1120.0*(384/1024), 1120.0*(160/436), 511.5*(384/1024) , 217.5*(160/436) )
         else:
             intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5 , 217.5 )
@@ -328,20 +335,7 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
             depth_initial*=scales[i]
         if scale:
             depth_initial*=scale_f
-    if gtruth:
-        truth = depth_read(os.path.join(truth_path, file))
-        if scale:
-            truth*=scale_f
-        truth[truth == 100000000000.0] = np.nan
-        if standart:
-            truth = resize(truth, depth.shape)
-        elif init:
-            truth = resize(truth, depth_initial.shape)
-        elif gma:
-            truth = resize(truth, depth_gma.shape)
-        elif dp:
-            truth = resize(truth, depth_dp.shape)
-
+    
     if gma:
         depth_gma = depth_read(os.path.join(depth_gma_path, file))
         if use_scales:
@@ -362,6 +356,26 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
         if scale:
             depth_gma_dp*=scale_f
 
+    if cvd_dp:
+        depth_cvd_dp = depth_read(os.path.join(depth_cvd_dp_path, file))
+        if scale:
+            depth_cvd_dp*=scale_f
+
+    if gtruth:
+        truth = depth_read(os.path.join(truth_path, file))
+        if scale:
+            truth*=scale_f
+        truth[truth == 100000000000.0] = np.nan
+        if standart:
+            truth = resize(truth, depth.shape)
+        elif init:
+            truth = resize(truth, depth_initial.shape)
+        elif gma:
+            truth = resize(truth, depth_gma.shape)
+        elif dp:
+            truth = resize(truth, depth_dp.shape)
+        elif cvd_dp:
+            truth = resize(truth, depth_cvd_dp.shape)
 
     if (gtruth or norm) and standart:   
         
@@ -374,6 +388,9 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
             depth_norm_dp = depth_dp * scale_factor_dp
         if dp_gma:
             depth_norm_gma_dp = depth_gma_dp * scale_factor_gma_dp
+        if cvd_dp:
+            #depth_norm_cvd_dp = depth_cvd_dp * scale_factor_cvd_dp
+            pass #TODO
         
 
         distance = (truth - depth)
@@ -465,6 +482,15 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
             depth_img_g_d=o3d.geometry.Image(depth_gma_dp)
             pc_g_d=o3d.geometry.PointCloud.create_from_depth_image(depth_img_g_d, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
 
+    if cvd_dp:
+        if norm:
+            depth_img_cvd_dp__n=o3d.geometry.Image(depth_norm_cvd_dp)
+            pc_cvd_dp_n=o3d.geometry.PointCloud.create_from_depth_image(depth_img_cvd_dp_n, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1) #TODO: import extrinsic,intrinsic
+
+        if not_norm:
+            depth_img_cvd_dp=o3d.geometry.Image(depth_cvd_dp)
+            pc_cvd_dp=o3d.geometry.PointCloud.create_from_depth_image(depth_img_cvd_dp, intrinsic, extrinsic=extrinsic, depth_scale=1000.0, depth_trunc=1000.0, stride=1)
+
     #intrinsic=o3d.camera.PinholeCameraIntrinsic(1024, 436, 1120.0, 1120.0, 511.5, 217.5)
     sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.01, resolution=20, create_uv_map=False)
    
@@ -498,6 +524,11 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
             pcs.append(pc_g_d)
         if norm:
             pcs.append(pc_g_d_n)
+    if cvd_dp:
+        if not_norm:
+            pcs.append(pc_cvd_dp)
+        if norm:
+            pcs.append(pc_cvd_dp_n)
     if accumulate:
         pcs+=pcs_acc
     print("\n"+str(file)+":")
@@ -540,7 +571,13 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
         if norm and not rainbow:
             print("depth gma dp(norm) = orange")
             pc_g_d_n.paint_uniform_color([1, 0.58, 0.]) #orange
-            
+    if cvd_dp:
+        if not_norm and not rainbow:
+            print("depth cvd_dp = turquoise")
+            pc_cvd_dp.paint_uniform_color([0, 1, 0.98]) #turquoise
+        if norm and not rainbow:
+            print("depth cvd_dp(norm) = dark turquoise")
+            pc_cvd_dp_n.paint_uniform_color([0, 0.5, 0.49]) #dark turquoise   
     if interactive:
         o3d.visualization.gui.Application.instance.initialize()
         w = o3d.visualization.O3DVisualizer("03DVisualizer",1024, 436)
@@ -549,6 +586,9 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
         #w.scene.set_background(np.array([1., 1., 1., 1.])) #Black
         o3d.visualization.gui.Application.instance.add_window(w)
         w.show_axes = True
+        w.show_settings = True
+        w.point_size=7
+        w.size_to_fit() #Full screen
         #w.size_to_fit() #Full screen
         mat = o3d.visualization.rendering.Material()
         #mat.base_color = [1.0, 1.0, 1.0, 1.0]

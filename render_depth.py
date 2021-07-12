@@ -42,8 +42,11 @@ vis_mask=False
 use_gtruth=False #DEFAULT: False
 #if use_gtruth: #TODO: fix
 #    rgbd=False
-use_initial=False
-type= "FN"  #FN / GMA / custom / ...
+use_initial=False  #DEFAULT: False
+use_cvd_dp=True  #DEFAULT: False
+if use_cvd_dp:
+    use_scales=False
+type= "FN"  #FN / GMA / custom /  ...
 if use_gtruth:
     custom_intrinsic=o3d.camera.PinholeCameraIntrinsic(1080, 1920, 1671.770118, 1671.770118, 540 , 960)
 else:
@@ -111,6 +114,8 @@ if use_gtruth:
     depth_path=os.path.join(depth_dataset_path,"training/depth/"+name+"/")
 elif use_initial:
     depth_path=os.path.join(src_path,"depth_mc/exact_depth/")
+elif use_cvd_dp:
+    depth_path=os.path.join("./data","CVD_DP",name,"exact_depth")
 else:
     for bs in batch_size: 
         depth_path=os.path.join(src_path,"R_hierarchical2_mc/B0.1_R1.0_PL1-0_LR0.0004_BS"+str(bs)+"_Oadam/exact_depth/")
