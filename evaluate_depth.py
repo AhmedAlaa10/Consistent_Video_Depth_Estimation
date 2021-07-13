@@ -108,6 +108,9 @@ os.makedirs(norm_gma_dp_error_vis_path, exist_ok=True)
 gma_dp_error_vis_path=os.path.join(output_path,"error_visualization_gma_dp")
 os.makedirs(gma_dp_error_vis_path, exist_ok=True)
 
+cvd_dp_error_vis_path=os.path.join(output_path,"error_visualization_cvd_dp")
+os.makedirs(cvd_dp_error_vis_path, exist_ok=True)
+
 diff_human_vis_path=os.path.join(output_path,"human_diff_visualization")
 os.makedirs(diff_human_vis_path, exist_ok=True)
 
@@ -535,6 +538,13 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
         inv_depth =  np.divide(1., distance_norm_gma_dp, out=np.zeros_like(distance_norm_gma_dp), where=distance_norm_gma_dp!=0)
         save_image(viz_path, inv_depth)
 
+    if cvd_dp:
+        #Error(gma_dp) vis:
+        viz_path = os.path.join(cvd_dp_error_vis_path, file.split(".")[0] + ".png") 
+        distance_cvd_dp+=1
+        distance_cvd_dp.squeeze()
+        inv_depth =  np.divide(1., distance_cvd_dp, out=np.zeros_like(distance_cvd_dp), where=distance_cvd_dp!=0)
+        save_image(viz_path, inv_depth)
     #Color vis for truth:
     #viz_path = os.path.join(truth_viz_path, file.split(".")[0] + ".png") 
     #truth.squeeze()

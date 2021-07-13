@@ -30,20 +30,23 @@ use_scales=True
 scale=True
 scale_f=0.5
 
-preview=False
+preview=True
 interactive=True
 pp=False
 rgbd=True
-vis_depth=False
-vis_obj=False
-vis_mask=False
-
+vis_depth=True
+vis_obj=True
+vis_mask=True
+if not preview:
+    vis_depth=False
+    vis_obj=False
+    vis_mask=False
 
 use_gtruth=False #DEFAULT: False
 #if use_gtruth: #TODO: fix
 #    rgbd=False
 use_initial=False  #DEFAULT: False
-use_cvd_dp=True  #DEFAULT: False
+use_cvd_dp=False  #DEFAULT: False
 if use_cvd_dp:
     use_scales=False
 type= "FN"  #FN / GMA / custom /  ...
@@ -509,6 +512,8 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
         rgbd_img_d=o3d.geometry.RGBDImage.create_from_color_and_depth(rgb_image, depth_img_d, depth_scale=1, depth_trunc=1000.0, convert_rgb_to_intensity=False)
         disable_extrinsics=False
         if disable_extrinsics:
+            cam_ex=metadata['extrinsics'][0]
+            cam_ex=np.append(cam_ex, [[0,0,0,1]], axis=0)
             pc_d=o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_img_d, intrinsic, extrinsic=cam_ex) #Keeping first ex -> closer result, and drift in other direction -> ex overcompensating?
         else:
             pc_d=o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_img_d, intrinsic, extrinsic=extrinsic) #Keeping first ex -> closer result, and drift in other direction -> ex overcompensating?
@@ -534,28 +539,28 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
     #t=np.array([x,-0.16,0.6]) #x(l->r),y(t->b),z(c->f) -center at 0,0,z #wave 1 scales=True:[-0.085,-0.16,0.6]
 
     #Wave 1 w extrinsics:
-    #xl=0.33
-    #xr=-0.07
-    #x=xl-np.abs(xr-xl)/len(files)*i#i
-    #zl=-0.6
-    #zr=-0.40
-    #z=zl+np.abs(zr-zl)/len(files)*i#i
-    #t=np.array([x,0.15,z]) #-x(l->r)?,y(t->b)?,-z(c->f), -center at 0,0,z #wave 1 radius=0.01 scales=True:[x,0.16,-0.6]
+    xl=0.33
+    xr=-0.07
+    x=xl-np.abs(xr-xl)/len(files)*24#i
+    zl=-0.6
+    zr=-0.40
+    z=zl+np.abs(zr-zl)/len(files)*24#i
+    t=np.array([x,0.15,z]) #-x(l->r)?,y(t->b)?,-z(c->f), -center at 0,0,z #wave 1 radius=0.01 scales=True:[x,0.16,-0.6]
 
     #Wave 1 w broken extrinsics:
-    xl=0.33
-    xr=-1.35
-    x=xl-np.abs(xr-xl)/len(files)*i#i
-    yl=0.17
-    yr=0.17
-    y=yl+np.abs(yr-yl)/len(files)*i#i
-    zl=-0.6
-    zr=-0.7
-    z=zl-np.abs(zr-zl)/len(files)*i#i
-    t=np.array([x,y,z]) #-x(l->r)?,y(t->b)?,-z(c->f), -center at 0,0,z #wave 1 radius=0.01 scales=True:[x,0.16,-0.6]
-    if i>60:
-        render_obj=False
-    print(i)
+    #xl=0.33
+    #xr=-1.35
+    #x=xl-np.abs(xr-xl)/len(files)*i#i
+    #yl=0.17
+    #yr=0.17
+    #y=yl+np.abs(yr-yl)/len(files)*i#i
+    #zl=-0.6
+    #zr=-0.7
+    #z=zl-np.abs(zr-zl)/len(files)*i#i
+    #t=np.array([x,y,z]) #-x(l->r)?,y(t->b)?,-z(c->f), -center at 0,0,z #wave 1 radius=0.01 scales=True:[x,0.16,-0.6]
+    #if i>60:
+    #    render_obj=False
+    #print(i)
     """
     [0. 0. 0.]
     [ 0.396352   -0.05877081  0.14071229] #red,green,blue? 

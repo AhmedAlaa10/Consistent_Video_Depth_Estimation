@@ -34,6 +34,9 @@ if not preview:
 if len(sys.argv) > 1:
     name = str(sys.argv[1])
 
+if len(sys.argv) > 2:
+    type = str(sys.argv[2])
+
 output_dir= os.path.join("./data/CVD_DP",name)
 os.makedirs(output_dir, exist_ok=True)
 final_depth_dir = os.path.join(output_dir, "exact_depth")
