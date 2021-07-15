@@ -25,12 +25,12 @@ viz=True
 gtruth=True
 norm=False
 not_norm=True
-init=False
+init=True
 standart=True 
 gma=False
-dp=False
+dp=True
 dp_gma=False
-cvd_dp=False
+cvd_dp=True
 accumulate=False
 rainbow=False
 interactive=True
@@ -497,6 +497,7 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
 
 
     pcs=[]
+    pc_names=[]
     if gtruth:
         pcs.append(pc_t)
     if standart:
@@ -535,49 +536,62 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
     if gtruth and not rainbow:
         print("ground truth = green")
         pc_t.paint_uniform_color([0.5, 0.706, 0.5]) #green
+        pc_names.append("ground truth = green")
     #o3d.visualization.draw_geometries([pc_t])
     if standart:
         if not_norm and not rainbow:
             print("depth = light red")
             pc.paint_uniform_color([1, 0, 0]) #red
+            pc_names.append("depth = light red")
         if norm and not rainbow:
             print("depth(norm) = dark red")
             pc_n.paint_uniform_color([0.55, 0, 0]) #dark red
+            pc_names.append("depth(norm) = dark red")
     if init:
         if not_norm and not rainbow:
             print("depth initial = light blue")
             pc_i.paint_uniform_color([0, 0.651, 0.929]) #light blue
+            pc_names.append("depth initial = light blue")
         if norm and not rainbow:
             print("depth initial(norm) = dark blue")
             pc_i_n.paint_uniform_color([0, 0, 1]) #dark blue
+            pc_names.append("depth initial(norm) = dark blue")
     if gma:
         if not_norm and not rainbow:
             print("depth gma = pink")
             pc_g.paint_uniform_color([0.9, 0.2, 0.84]) #pink
+            pc_names.append("depth gma = pink")
         if norm and not rainbow:
             print("depth gma(norm) = purple")
             pc_g_n.paint_uniform_color([0.5, 0.195, 0.66]) #purple
+            pc_names.append("depth gma(norm) = purple")
     if dp:
         if not_norm and not rainbow:
             print("depth dp = gray")
             pc_d.paint_uniform_color([0.31, 0.31, 0.31]) #gray
+            pc_names.append("depth dp = gray")
         if norm and not rainbow:
             print("depth dp(norm) = black")
             pc_d_n.paint_uniform_color([0., 0., 0.]) #black
+            pc_names.append("depth dp(norm) = black")
     if dp_gma:
         if not_norm and not rainbow:
             print("depth gma dp = yellow")
             pc_g_d.paint_uniform_color([1, 0.706, 0]) #yellow
+            pc_names.append("depth gma dp = yellow")
         if norm and not rainbow:
             print("depth gma dp(norm) = orange")
             pc_g_d_n.paint_uniform_color([1, 0.58, 0.]) #orange
+            pc_names.append("depth gma dp(norm) = orange")
     if cvd_dp:
         if not_norm and not rainbow:
             print("depth cvd_dp = turquoise")
             pc_cvd_dp.paint_uniform_color([0, 1, 0.98]) #turquoise
+            pc_names.append("depth cvd_dp = turquoise")
         if norm and not rainbow:
             print("depth cvd_dp(norm) = dark turquoise")
-            pc_cvd_dp_n.paint_uniform_color([0, 0.5, 0.49]) #dark turquoise   
+            pc_cvd_dp_n.paint_uniform_color([0, 0.5, 0.49]) #dark turquoise  
+            pc_names.append("depth cvd_dp(norm) = dark turquoise") 
     if interactive:
         o3d.visualization.gui.Application.instance.initialize()
         w = o3d.visualization.O3DVisualizer("03DVisualizer",1024, 436)
@@ -593,9 +607,9 @@ for i, file in enumerate(files): #["frame_0001.dpt"]:
         mat = o3d.visualization.rendering.Material()
         #mat.base_color = [1.0, 1.0, 1.0, 1.0]
         mat.shader = 'defaultUnlit'
-        for pc in pcs: 
+        for i, pc in enumerate(pcs): 
                 print("added pc")
-                w.add_geometry(str(ix),pc,mat)
+                w.add_geometry(pc_names[i],pc,mat)
                 ix+=1
         o3d.visualization.gui.Application.instance.run()
     else:
